@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 from cpu import CPU
 import yaml
-
+import threading
 
 
 class UI:
@@ -12,6 +12,10 @@ class UI:
         # Main Window
         self.root = tk.Tk()
         self.root.title("Basic Computer Simulation")
+
+        # Running text and request
+        self.run_button_text = tk.StringVar(value="Run")
+        self.stop_requested = False
 
         # self.root.geometry("800x600")
 
@@ -42,6 +46,25 @@ class UI:
         # Start the main loop
         self.update_ui()
         self.root.mainloop()
+
+    def run_code(self):
+        def run_instructions():
+            while not self.stop_requested and self.cpu.GS != 0:
+                self.cpu.run_next() 
+                self.root.update_idletasks()    
+
+            # Reset button text and stop flag
+            self.run_button_text.set("Run")
+            self.running_thread = None
+
+        if self.run_button_text.get() == "Run":
+            self.stop_requested = False
+            self.run_button_text.set("Stop")
+            self.running_thread = threading.Thread(target=run_instructions, daemon=True)
+            self.running_thread.start()
+        else:
+            self.stop_requested = True
+            self.run_button_text.set("Run")
 
 
     def load_program(self): 
@@ -101,6 +124,8 @@ class UI:
             entry.grid(row = i, column = 1, pady = 1)
             self.flip_flops[ff] = [var, entry]
             self.prev_state[ff] = str(getattr(self.cpu, ff))
+
+
 
     def create_registers_panel(self, frame):
         # Create a frame for registers
@@ -183,7 +208,7 @@ class UI:
         button_frame.columnconfigure(0, weight=1)
         button_frame.columnconfigure(1, weight=1)
         button_frame.columnconfigure(2, weight=1)
-
+        button_frame.columnconfigure(3, weight=1)
         # Create the buttons
         load_button = tk.Button(button_frame, text="Load", command=self.load_program)
         step_button = tk.Button(button_frame, text="Step", command=lambda: print("Step clicked"))
@@ -199,12 +224,8 @@ class UI:
         load_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         step_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         run_button.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+
         dropdown.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
-
-
-
-        # lbl = tk.Label(dropdown_frame, text=f"Clock:   ")
-        # lbl.pack(side=tk.LEFT)
 
         def clk_change(*args): self.cpu.clk = float(selected_option.get())
         selected_option.trace_add('write', clk_change)

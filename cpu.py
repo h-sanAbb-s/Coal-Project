@@ -3,20 +3,20 @@ from time import sleep
 
 class CPU:
     def __init__(self):
-        self.AR = '00'     # Address Register (8 bits)
-        self.PC = '00'     # Program Counter (8 bits)
-        self.DR = '000'     # Data Register (12 bits)
-        self.AC = '000'     # Accumulator (12 bits)
+        self.AR = '0'     # Address Register (8 bits)
+        self.PC = '0'     # Program Counter (8 bits)
+        self.DR = '0'     # Data Register (12 bits)
+        self.AC = '0'     # Accumulator (12 bits)
         self.INPR = '0'   # Input Register (8 bits)
-        self.IR = ''     # instruction Register (12 bits)
-        self.TR = '000'     # Temporary Register (12 bits)
-        self.TM = '00'     # Timer Register (8 bits)
-        self.PRC = '00'    # Priority Register (3 bits)
+        self.IR = '0'     # instruction Register (12 bits)
+        self.TR = '0'     # Temporary Register (12 bits)
+        self.TM = '0'     # Timer Register (8 bits)
+        self.PRC = '0'    # Priority Register (3 bits)
         self.TAR = '0'    # Target Register (3 bits)
         self.TP = '0'     # Temporary Pointer (3 bits)
-        self.NS = '0'     # Number of stops Register (3 bits)
+        self.NS = '0'     # Next State Register (3 bits)
         self.OUT = '0'    # Output Register (8 bits)
-        self.PSR = {'S': 0, 'A1' : 0, 'A0' : 0, 'E': 0, 'AC': '000', 'PC': '000', 'PC0':'000'}
+        self.PSR = {'S': 0, 'A1' : 0, 'A0' : 0, 'E': 0, 'AC': 0, 'PC': 0, 'PC0':0}
 
         # Flip-Flops
         self.I = 0      # Interrupt Flip-Flop
@@ -33,10 +33,6 @@ class CPU:
         self.A1 = 0     # A1 Flip-Flop
         self.clk = 1
 
-        self.execute = False
-        self.running = False
-
-        
         # Main Memory (256 words, each 12 bits)
         self.main_memory = [''] * 256
 
@@ -45,8 +41,42 @@ class CPU:
         self.secondary_memory = [
             {'S': '', 'A1' : '', 'A0' : '', 'E': '', 'AC': '', 'PC0': '', 'PC': ''} for _ in range(8)
         ]
-    
 
+        ## OTHER GLOBAL VARIABLE
+        self.instruction_map = {
+            "AND": self.AND_instruction,
+            "ADD": self.ADD_instruction,
+            "SUB": self.SUB_instruction,
+            "OR": self.OR_instruction,
+            "CAL": self.CAL_instruction,
+            "LDA": self.LDA_instruction,
+            "STA": self.STA_instruction,
+            "BR": self.BR_instruction,
+            "ISA": self.ISA_instruction,
+            "SWT": self.SWT_instruction,
+            "AWT": self.AWT_instruction,
+            "CLE": self.CLE_instruction,
+            "CMA": self.CMA_instruction,
+            "CME": self.CME_instruction,
+            "CIR": self.CIR_instruction,
+            "CIL": self.CIL_instruction,
+            "SZA": self.SZA_instruction,
+            "SZE": self.SZE_instruction,
+            "ICA": self.ICA_instruction,
+            "ESW": self.ESW_instruction,
+            "DSW": self.DSW_instruction,
+            "HLT": self.HLT_instruction,
+            "FORK": self.FORK_instruction,
+            "RST": self.RST_instruction,
+            "UTM": self.UTM_instruction,
+            "LDP": self.LDP_instruction,
+            "SPA": self.SPA_instruction,
+            "INP": self.INP_instruction,
+            "OUT": self.OUT_instruction,
+            "SKI": self.SKI_instruction,
+            "SKO": self.SKO_instruction,
+            "EI": self.EI_instruction,
+        }
     def fetch(self):
         self.AR = self.PC
         self.block() 
@@ -184,7 +214,6 @@ class CPU:
         self.main_memory[int(self.AR, 16)] = self.DR
         if self.DR == self.AC:
             self.PC = self.hex_op(self.PC, '1', bits = 2) 
-        
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
         self.block()
@@ -196,6 +225,7 @@ class CPU:
         self.PSR["A0"] = self.A0
         self.PSR["A1"] = self.A1
         self.PSR["S"] = self.S
+        
         self.TR = self.main_memory[int(self.AR, 16)]
         self.block()
 
@@ -222,7 +252,7 @@ class CPU:
         self.S = 1
         self.TM = self.main_memory[int(self.AR, 16)]
         if self.PSR["S"] == 0:
-            self.NS = str(int(self.NS) - 1) 
+            self.NS -= 1
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
         self.block()
@@ -260,16 +290,17 @@ class CPU:
         self.block()
 
     def CIR_instruction(self):
-        Lsb = int(self.AC, 16) & 1 
-        self.AC = self.hex_op(self.AC, '0', func = lambda x, y: (x >> 1) | (self.E << 11))
+
+        Lsb= self.AC & 1 
+        self.AC = (self.AC >> 1) | (self.E << 11) 
         self.E = Lsb
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
         self.block()
 
     def CIL_instruction(self):
-        Msb = (int(self.AC) >> 11) & 1
-        self.AC = self.hex_op(self.AC, '0', func = lambda x, y: ((x << 1) & ((1 << 12) - 1)) | self.E)
+        Msb = (self.AC >> 11) & 1
+        self.AC = ((self.AC << 1) & ((1 << 12) - 1)) | self.E  
         self.E = Msb
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
@@ -318,6 +349,8 @@ class CPU:
     def SUB_instruction(self):
         self.A0 = 1
         self.A1 = 0
+
+        sleep(1/self.clk)
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
         self.block()
@@ -453,3 +486,21 @@ class CPU:
         self.IEN = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+
+
+
+    def run_next(self):
+        if self.TM == '00':
+                self.C = 1
+                self.contextSwitch()
+        else:
+            self.fetch()
+            opcode, address, I_address = self.decode()
+            if I_address == True:
+                self.AR = self.main_memory[address]
+            
+            if opcode in self.instruction_map:
+                self.instruction_map[opcode]()  
+            else:
+                raise ValueError(f"Unknown opcode: {opcode}")
+      
