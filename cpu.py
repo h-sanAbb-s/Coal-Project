@@ -33,6 +33,9 @@ class CPU:
         self.A1 = 0     # A1 Flip-Flop
         self.clk = 1
 
+        self.running = False
+        self.execute = False
+        
         # Main Memory (256 words, each 12 bits)
         self.main_memory = [''] * 256
 
@@ -350,7 +353,7 @@ class CPU:
         self.A0 = 1
         self.A1 = 0
 
-        sleep(1/self.clk)
+        self.block() 
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
         self.block()
@@ -426,14 +429,23 @@ class CPU:
 
     def UTM_instruction(self):
         self.AR = '08'
+
+        self.block()
         self.TM = self.main_memory[int(self.AR, 16)]
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.block()
 
     def LDP_instruction(self):
         self.AR = self.PRC
+        self.block()
+
         self.TAR = self.main_memory[int(self.AR, 16)]
+        self.block()
+
         self.PSR = self.secondary_memory[int(self.TAR, 16)]
+        self.block()
+
         self.PC = self.PSR["PC"]
         self.AC = self.PSR["AC"]
         self.E = self.PSR["E"]
@@ -442,26 +454,32 @@ class CPU:
         self.S = self.PSR["S"]
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.block()
 
     def SPA_instruction(self):
         self.AR = self.PRC
+        self.block()
+
         if self.main_memory[int(self.AR, 16)] == self.AC:
             self.PC = self.hex_op(self.PC, '1', bits = 2) 
 
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.block()
 
     def INP_instruction(self):
         self.AC = self.INPR
         self.FGI = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.block()
     
     def OUT_instruction(self):
         self.OUTR = self.AC
         self.FGO = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.block()
 
     def SKI_instruction(self):
         if self.FGI == 1:
@@ -469,6 +487,7 @@ class CPU:
         
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.block()
 
     def SKO_instruction(self):
         if self.FGO == 1:
@@ -476,17 +495,19 @@ class CPU:
         
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.block()
 
     def EI_instruction(self):
         self.IEN = 1
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.block()
 
     def DI_instruction(self):
         self.IEN = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-
+        self.block()
 
 
     def run_next(self):
