@@ -35,7 +35,7 @@ class CPU:
 
         self.running = False
         self.execute = False
-        
+        self.stepping = False
         # Main Memory (256 words, each 12 bits)
         self.main_memory = [''] * 256
 

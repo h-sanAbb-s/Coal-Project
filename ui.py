@@ -6,7 +6,7 @@ import threading
 
 
 class UI:
-    def __init__(self, cpu):
+    def __init__(self, cpu: CPU):
         self.cpu = cpu
 
         # Main Window
@@ -49,8 +49,11 @@ class UI:
 
 
     def step_code(self):
+        if self.cpu.stepping == False: 
+            self.cpu.stepping = True
+            self.step_running = threading.Thread(target = self.cpu.run_next(),daemon=True)
+            self.step_running.start()
         self.cpu.execute = True
-        self.cpu.run_next()
 
 
     def run_code(self):
@@ -86,33 +89,32 @@ class UI:
         self.cpu.__init__()
         file = open(file_path, 'r') 
         config = yaml.safe_load(file)
-        try: 
-            if 'REG' in config: 
-                for r, v in config['REG'].items(): 
-                    setattr(self.cpu, r, str(v))
+        if 'REG' in config: 
+            for r, v in config['REG'].items(): 
+                setattr(self.cpu, r, str(v))
 
-            if 'FF' in config: 
-                for f, v in config['FF'].items(): 
-                    setattr(self.cpu, f, int(v))
+        if 'FF' in config: 
+            for f, v in config['FF'].items(): 
+                setattr(self.cpu, f, int(v))
             
-            if 'M' in config: 
-                for l, v in config['M'].items(): 
-                    l = int(str(l), 16)
-                    self.cpu.main_memory[l] = str(v)
+        if 'M' in config: 
+            for l, v in config['M'].items(): 
+                l = int(str(l), 16)
+                self.cpu.main_memory[l] = str(v)
 
-            if 'M2' in config: 
-                for l, p in config['M2'].items(): 
-                    l = int(str(l), 16)
-                    p['PC'] = str(p['PC'])
-                    p['PC0'] = str(p['PC0'])
-                    p['AC'] = str(p['AC'])
-                    self.cpu.secondary_memory[l] = p 
+        if 'M2' in config: 
+            for l, p in config['M2'].items(): 
+                l = int(str(l), 16)
+                p['PC'] = str(p['PC'])
+                p['PC0'] = str(p['PC0'])
+                p['AC'] = str(p['AC'])
+                self.cpu.secondary_memory[l] = p 
                     
-        except: 
-            print(f"Error in program file: f{file_path}")
-            self.cpu.__init__()
-            self.loading = False
-            return
+        # except: 
+        #     print(f"Error in program file: f{file_path}")
+        #     self.cpu.__init__()
+        #     self.loading = False
+        #     return
 
     
 
