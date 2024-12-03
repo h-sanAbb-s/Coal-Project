@@ -41,6 +41,42 @@ class CPU:
         self.secondary_memory = [
             {'S': '', 'A1' : '', 'A0' : '', 'E': '', 'AC': '', 'PC0': '', 'PC': ''} for _ in range(8)
         ]
+
+        ## OTHER GLOBAL VARIABLE
+        self.instruction_map = {
+            "AND": self.AND_instruction,
+            "ADD": self.ADD_instruction,
+            "SUB": self.SUB_instruction,
+            "OR": self.OR_instruction,
+            "CAL": self.CAL_instruction,
+            "LDA": self.LDA_instruction,
+            "STA": self.STA_instruction,
+            "BR": self.BR_instruction,
+            "ISA": self.ISA_instruction,
+            "SWT": self.SWT_instruction,
+            "AWT": self.AWT_instruction,
+            "CLE": self.CLE_instruction,
+            "CMA": self.CMA_instruction,
+            "CME": self.CME_instruction,
+            "CIR": self.CIR_instruction,
+            "CIL": self.CIL_instruction,
+            "SZA": self.SZA_instruction,
+            "SZE": self.SZE_instruction,
+            "ICA": self.ICA_instruction,
+            "ESW": self.ESW_instruction,
+            "DSW": self.DSW_instruction,
+            "HLT": self.HLT_instruction,
+            "FORK": self.FORK_instruction,
+            "RST": self.RST_instruction,
+            "UTM": self.UTM_instruction,
+            "LDP": self.LDP_instruction,
+            "SPA": self.SPA_instruction,
+            "INP": self.INP_instruction,
+            "OUT": self.OUT_instruction,
+            "SKI": self.SKI_instruction,
+            "SKO": self.SKO_instruction,
+            "EI": self.EI_instruction,
+        }
     def fetch(self):
         self.AR = self.PC
         self.IR = self.main_memory[int(self.AR, 16)]
@@ -49,9 +85,11 @@ class CPU:
     def decode(self):
         codes = self.IR.split(' ')
         if len(codes) == 1:
+            self.I = 0
             return {"instruction":codes[0],"address":None,"I_addressing":False}
         elif len(codes) == 2:
             self.AR = codes[-1]
+            self.I = 0
             return {"instruction":codes[0],"address":codes[-1],"I_addressing":False}
         else:
             self.AR = codes[-1]
@@ -68,6 +106,10 @@ class CPU:
     
     @staticmethod
     def minus(x, y): return x - y
+
+
+                
+
 
     def contextSwitch(self):
         self.PSR["PC"] = self.PC
@@ -358,3 +400,21 @@ class CPU:
         self.IEN = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+
+
+
+    def run_next(self):
+        if self.TM == '00':
+                self.C = 1
+                self.contextSwitch()
+        else:
+            self.fetch()
+            opcode, address, I_address = self.decode()
+            if I_address == True:
+                self.AR = self.main_memory[address]
+            
+            if opcode in self.instruction_map:
+                self.instruction_map[opcode]()  
+            else:
+                raise ValueError(f"Unknown opcode: {opcode}")
+      
