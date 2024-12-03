@@ -49,23 +49,23 @@ class CPU:
 
     def fetch(self):
         self.AR = self.PC
-        sleep(1/self.clk) 
+        self.block() 
         self.IR = self.main_memory[int(self.AR, 16)]
         self.PC = self.hex_op(self.PC, '1', bits = 2) 
 
     def decode(self):
         codes = self.IR.split(' ')
         if len(codes) == 1:
-            sleep(1/self.clk) 
+            self.block() 
             return {"instruction":codes[0],"address":None,"I_addressing":False}
         elif len(codes) == 2:
             self.AR = codes[-1]
-            sleep(1/self.clk)
+            self.block()
             return {"instruction":codes[0],"address":codes[-1],"I_addressing":False}
         else:
             self.AR = codes[-1]
             self.I = 1
-            sleep(1/self.clk)
+            self.block()
             return {"instruction":codes[0],"address":codes[-1],"I_addressing":True}
 
     @staticmethod
@@ -79,9 +79,13 @@ class CPU:
     @staticmethod
     def minus(x, y): return x - y
 
-    @staticmethod
-    def block(): 
-        pass
+    def block(self): 
+        self.execute = False 
+        if self.running:
+            sleep(1/self.clk) 
+        else: 
+            while self.execute == False: pass
+        self.execute = True
 
 
     def contextSwitch(self):
@@ -92,29 +96,29 @@ class CPU:
         self.PSR["A1"] = self.A1
         self.PSR["S"] = self.S
         self.AR = self.PRC
-        sleep(1/self.clk)
+        self.block()
 
         self.TAR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.AR = '08'
         self.PRC = self.hex_op(self.PRC,  '1', 2)
-        sleep(1/self.clk)
+        self.block()
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR
         self.TM = self.main_memory[int(self.AR, 16)]
         if (self.PRC == self.TP):
             self.PRC = '000'
-        sleep(1/self.clk)        
+        self.block()        
 
         self.AR = self.PRC
-        sleep(1/self.clk)
+        self.block()
 
         self.TAR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.PSR = self.secondary_memory[int(self.TAR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.PC = self.PSR["PC"]
         self.AC = self.PSR["AC"]
@@ -126,11 +130,11 @@ class CPU:
         if (self.S == 0):
             self.C = 1
         self.SC = 0
-        sleep(1/self.clk)
+        self.block()
 
     def CAL_instruction(self):
         self.DR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         if self.A0 == 0 and self.A1 == 0:
             self.AC = self.hex_op(self.AC, self.DR)
@@ -142,40 +146,40 @@ class CPU:
             self.AC = self.hex_op(self.AC, self.DR, func = lambda x,y: x | y)
 
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def LDA_instruction(self):
         self.DR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.AC = self.DR
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def STA_instruction(self):
         self.main_memory[int(self.AR, 16)] = self.AC
-        sleep(1/self.clk)
+        self.block()
 
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
 
     def BR_instruction(self):
         self.PC = self.AR
-        sleep(1/self.clk)
+        self.block()
 
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2)  
-        sleep(1/self.clk)
+        self.block()
 
     def ISA_instruction(self):
         self.DR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.DR = self.hex_op(self.DR, '1', func = self.minus)
-        sleep(1/self.clk)
+        self.block()
 
         self.main_memory[int(self.AR, 16)] = self.DR
         if self.DR == self.AC:
@@ -183,7 +187,7 @@ class CPU:
         
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def SWT_instruction(self):
         self.PSR["PC"] = self.PC
@@ -193,22 +197,22 @@ class CPU:
         self.PSR["A1"] = self.A1
         self.PSR["S"] = self.S
         self.TR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.AR = self.PRC
-        sleep(1/self.clk)
+        self.block()
 
         self.TAR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR
         self.TAR = self.TR
-        sleep(1/self.clk)
+        self.block()
         
 
         self.PSR = self.secondary_memory[int(self.TAR, 16)]
         self.AR = '08'
-        sleep(1/self.clk)
+        self.block()
 
         self.PC = self.PSR["PC"]
         self.AC = self.PSR["AC"]
@@ -221,39 +225,39 @@ class CPU:
             self.NS = str(int(self.NS) - 1) 
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
     
 
     def AWT_instruction(self):
         self.TAR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.PSR = self.secondary_memory[int(self.TAR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         if self.PSR["S"] == 1:
             self.PC = self.hex_op(self.PC, '1', func = lambda x, y : x - y, bits = 2) 
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def CLE_instruction(self):
         self.E = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def CMA_instruction(self):
         self.AC = ~self.AC & ((1 << 12) - 1)  
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def CME_instruction(self):
         self.E = ~self.E & ((1 << 12) - 1)
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def CIR_instruction(self):
         Lsb = int(self.AC, 16) & 1 
@@ -261,7 +265,7 @@ class CPU:
         self.E = Lsb
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def CIL_instruction(self):
         Msb = (int(self.AC) >> 11) & 1
@@ -269,7 +273,7 @@ class CPU:
         self.E = Msb
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
 
     def SZA_instruction(self):
@@ -277,65 +281,65 @@ class CPU:
             self.PC = self.hex_op(self.PC, '1', bits = 2) 
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def SZE_instruction(self):
         if self.E == 0:
             self.PC = self.hex_op(self.PC, '1', bits = 2)     
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def ICA_instruction(self):
         self.AC += 1
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def ESW_instruction(self):
         self.SW = 1
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def DSW_instruction(self):
         self.SW = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
     
     def ADD_instruction(self):
         self.A0 = 0
         self.A1 = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
     
     def SUB_instruction(self):
         self.A0 = 1
         self.A1 = 0
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def AND_instruction(self):
         self.A0 = 0
         self.A1 = 1
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def OR_instruction(self):
         self.A0 = 1
         self.A1 = 1
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def HLT_instruction(self):
         self.S = 0
         self.NS = self.hex_op(self.NS, '1', bits = 2)
-        sleep(1/self.clk)
+        self.block()
 
         if self.NS == self.TP:
             self.GS = 0
@@ -344,7 +348,7 @@ class CPU:
         self.C = 1
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def FORK_instruction(self):
         self.PSR["PC"] = self.PC
@@ -355,26 +359,26 @@ class CPU:
         self.PSR["S"] = self.S
         self.AR = self.TP
         self.TP = self.hex_op(self.TM, '1', bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
 
         self.TAR = self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR
         self.SC = 0
         self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
-        sleep(1/self.clk)
+        self.block()
 
     def RST_instruction(self):
         self.AR = self.PRC
-        sleep(1/self.clk)
+        self.block()
         
         self.TAR =  self.main_memory[int(self.AR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.PSR = self.secondary_memory[int(self.TAR, 16)]
-        sleep(1/self.clk)
+        self.block()
 
         self.PSR["PC"] = self.PSR["PC0"]
         self.PSR["AC"] = '000'
@@ -384,7 +388,7 @@ class CPU:
         self.PSR["E"] = 0
         self.S = 0
         self.SC = 0
-        sleep(1/self.clk)
+        self.block()
 
 
     def UTM_instruction(self):
