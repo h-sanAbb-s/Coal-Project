@@ -47,22 +47,28 @@ class UI:
         self.update_ui()
         self.root.mainloop()
 
+
+    def step_code(self):
+        self.cpu.execute = True
+        self.cpu.run_next()
+
+
     def run_code(self):
         def run_instructions():
             while not self.stop_requested and self.cpu.GS != 0:
                 self.cpu.run_next() 
-                self.root.update_idletasks()    
 
-            # Reset button text and stop flag
             self.run_button_text.set("Run")
             self.running_thread = None
 
         if self.run_button_text.get() == "Run":
             self.stop_requested = False
+            self.cpu.running = True
             self.run_button_text.set("Stop")
             self.running_thread = threading.Thread(target=run_instructions, daemon=True)
             self.running_thread.start()
         else:
+            self.cpu.running = False
             self.stop_requested = True
             self.run_button_text.set("Run")
 
@@ -211,8 +217,8 @@ class UI:
         button_frame.columnconfigure(3, weight=1)
         # Create the buttons
         load_button = tk.Button(button_frame, text="Load", command=self.load_program)
-        step_button = tk.Button(button_frame, text="Step", command=lambda: print("Step clicked"))
-        run_button = tk.Button(button_frame, text="Run", command=lambda: print("Run clicked"))
+        step_button = tk.Button(button_frame, text="Step", command=self.step_code)
+        run_button = tk.Button(button_frame, text="Run", command=self.run_code)
 
         selected_option = tk.StringVar()
         selected_option.set(str(self.cpu.clk)+"hz")
@@ -232,7 +238,7 @@ class UI:
 
     def update_ui(self):
         if self.loading: return
-
+        if self.cpu.execute: return
         # Update flip-flops
         for ff, (var, entry) in self.flip_flops.items():
             val = str(getattr(self.cpu,ff))
@@ -287,7 +293,7 @@ class UI:
                 values.append(str(row[col]))
             self.secondary_memory_table.item(child, values=values)
 
-        self.root.after(int((1/self.cpu.clk) * 1000), self.update_ui)
+        self.root.after(300, self.update_ui)
 
 
 cpu = CPU()
