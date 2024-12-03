@@ -108,15 +108,24 @@ class UI:
         registers_frame.pack(side=tk.LEFT, fill=tk.Y, anchor=tk.W)
 
         self.registers = {}
-        for i , reg in enumerate(self.registers_names):
-            width = 12 if reg != 'PSR' else 20
-            var = tk.StringVar(value=str(getattr(self.cpu, reg)))
+        for i, reg in enumerate(self.registers_names):
+            width = 12 if reg != 'PSR' else 15
+            if reg == 'PSR':
+                psr_value = getattr(self.cpu, reg, {})
+                print(psr_value)
+                formatted_psr = '-'.join(str(value) for key, value in psr_value.items())
+                print(formatted_psr, type(formatted_psr))
+                var = tk.StringVar(value=str(formatted_psr))
+            else:
+                var = tk.StringVar(value=str(getattr(self.cpu, reg)))
+
             lbl = tk.Label(registers_frame, text=f"{reg}:")
-            lbl.grid(row = i, column= 0, pady=1)
+            lbl.grid(row=i, column=0, pady=1)
             entry = tk.Entry(registers_frame, textvariable=var, width=width, justify='center')
-            entry.grid(row = i, column = 1,pady=1)
+            entry.grid(row=i, column=1, pady=1)
             self.registers[reg] = [var, entry]
             self.prev_state[reg] = str(getattr(self.cpu, reg))
+
 
     def create_main_memory_table(self, frame):
         # Create a frame for main memory
@@ -216,7 +225,11 @@ class UI:
         # Update registers
         mem_pointer = 'PC'
         for reg, (var, entry) in self.registers.items():
-            val = str(getattr(self.cpu,reg))
+            val = getattr(self.cpu, reg)
+            if reg == "PSR":
+                val =  '-'.join(str(value) for key, value in val.items())
+            else: 
+                val = str(val)
             if val != self.prev_state[reg]: 
                 if reg == 'AR': mem_pointer = 'AR'
                 entry.config(bg='blue', fg='white')
