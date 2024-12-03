@@ -16,7 +16,7 @@ class CPU:
         self.TP = '0'     # Temporary Pointer (3 bits)
         self.NS = '0'     # Next State Register (3 bits)
         self.OUT = '0'    # Output Register (8 bits)
-        self.PSR = '0'
+        self.PSR = {'S': 0, 'A1' : 0, 'A0' : 0, 'E': 0, 'AC': 0, 'PC': 0, 'PC0':0}
 
         # Flip-Flops
         self.I = 0      # Interrupt Flip-Flop
