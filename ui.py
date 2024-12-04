@@ -21,7 +21,8 @@ class UI:
         self.registers_names = ["AR", "PC", "DR", "AC", "INPR", "IR", "TR", "TM", "PRC", "TAR", "TP", "NS", "OUT", "PSR"]
         self.flip_flops_names = ["I", "E", "R", "C", "SW", "IEN", "FGI", "FGO", "S", "GS", "A0", "A1"]
         self.prev_state = {}
-        self.prev_changed_values = self.registers_names + self.flip_flops_names
+        # self.prev_changed_values = self.registers_names + self.flip_flops_names
+        self.prev_changed_values = [] 
         self.loading = False
         # self.cpu.set_ui(self)
 
@@ -50,7 +51,8 @@ class UI:
 
     def step_code(self):
         if self.cpu.stepping == False: 
-            self.prev_changed_values = self.registers_names + self.flip_flops_names
+            # self.prev_changed_values = self.registers_names + self.flip_flops_names
+            # self.clear_selected()
             self.step_running = threading.Thread(target = self.cpu.run_next,daemon=True)
             self.step_running.start()
 
@@ -113,6 +115,7 @@ class UI:
                 self.cpu.secondary_memory[l] = p 
                     
         self.update_ui()
+
         # except: 
         #     print(f"Error in program file: f{file_path}")
         #     self.cpu.__init__()
@@ -327,6 +330,7 @@ class UI:
             if val != self.prev_state[ff]: 
                 entry.config(bg='blue', fg='white')
                 self.prev_state[ff] = val
+                self.prev_changed_values.append(ff)
             else: 
                 entry.config(bg='white', fg='black')
             # entry.config(state = "normal")
@@ -345,6 +349,7 @@ class UI:
                 if reg == 'AR': mem_pointer = 'AR'
                 entry.config(bg='blue', fg='white')
                 self.prev_state[reg] = val
+                self.prev_changed_values.append(reg)
             else: 
                 entry.config(bg='white', fg='black')
             var.set(val)

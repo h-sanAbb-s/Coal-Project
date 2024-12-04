@@ -3,9 +3,45 @@ import inspect
 import threading
 
 
+class Hex(): 
+    
+    def __init__(self, val = '0', bits = 2): 
+        self.bits = bits
+        self.val = self._hex(int(val, 16))
+
+    def _hex(self, val):
+        if val < 0: 
+            val = pow(2, self.bits*4) - abs(val)
+        
+        val = hex(val)[2:]
+        val = val.rjust(self.bits, '0')
+        return val[-self.bits:].upper()
+
+
+    def __add__(self, other): 
+        return self._hex(int(self.val, 16) + int(other.val, 16))
+        
+
+    def __sub__(self, other: 'Hex'): 
+        new_val = self._hex(-int(other.val, 16))
+        return self + Hex(new_val, self.bits)
+    
+    def __eq__(self, other): 
+        return int(self.val, 16) == int(other.val, 16)
+    
+    def __str__(self): 
+        return self.val
+    
+    def __and__(self, other): 
+        return self._hex(int(self.val, 16) & int(other.val))
+    
+    def __or__(self, other): 
+        return self._hex(int(self.val, 16) | int(other.val))
+
+
 class CPU:
     def __init__(self):
-        self.AR = '0'     # Address Register (8 bits)
+        self.AR = '0'    # Address Register (8 bits)
         self.PC = '0'     # Program Counter (8 bits)
         self.DR = '0'     # Data Register (12 bits)
         self.AC = '0'     # Accumulator (12 bits)
@@ -93,14 +129,14 @@ class CPU:
     def fetch(self):
         self.AR = self.PC
         self.block(['AR']) 
+
         self.IR = self.main_memory[int(self.AR, 16)]
-        self.PC = self.hex_op(self.PC, '1', bits = 2) 
+        self.PC = Hex(self.PC) + Hex('1') 
         self.block(['IR', 'PC'])
 
     def decode(self):
         codes = self.IR.split(' ')
         if len(codes) == 1:
-            self.block()
             return codes[0].strip().upper(), None,False
         elif len(codes) == 2:
             self.AR = codes[-1].upper().strip()
@@ -124,6 +160,9 @@ class CPU:
     def minus(x, y): return x - y
 
     def block(self, changed_var = []): 
+        print(f"Changed Vars: {changed_var}")
+        print(f"Parent Function: {inspect.stack()[1].function}")
+
         self.changed_vars = changed_var
         self.update_ui = True
         with self.lock: 
@@ -134,7 +173,7 @@ class CPU:
         else: 
             while self.execute == False: pass
 
-        print(f"comming out of block with parent function {inspect.stack()[1].function}")
+        # print(f"comming out of block with parent function {inspect.stack()[1].function}")
 
 
     def contextSwitch(self):
@@ -151,7 +190,7 @@ class CPU:
         self.block(['TAR'])
 
         self.AR = '08'
-        self.PRC = self.hex_op(self.PRC,  '1', 2)
+        self.PRC = Hex(self.PRC) + Hex('1')
         self.block(['AR', 'PRC'])
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR
@@ -186,15 +225,17 @@ class CPU:
         self.block(['DR'])
 
         if self.A0 == 0 and self.A1 == 0:
-            self.AC = self.hex_op(self.AC, self.DR)
-        elif self.A0 == 1 and self.A1 == 0:
-            self.AC = self.hex_op(self.AC, self.DR, func = self.minus)
-        elif self.A0 == 0 and self.A1 == 1:
-            self.AC = self.hex_op(self.AC, self.DR, func = lambda x,y: x & y)
-        else:
-            self.AC = self.hex_op(self.AC, self.DR, func = lambda x,y: x | y)
+            self.AC = Hex(self.AC,3) + Hex(self.DR,3)
 
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        elif self.A0 == 1 and self.A1 == 0:
+            self.AC = Hex(self.AC,3) - Hex(self.DR,3)
+
+        elif self.A0 == 0 and self.A1 == 1:
+            self.AC = Hex(self.AC,3) & Hex(self.DR,3)
+        else:
+            self.AC = Hex(self.AC,3) | Hex(self.DR,3)
+
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'TM'])
 
     def LDA_instruction(self):
@@ -203,7 +244,7 @@ class CPU:
 
         self.AC = self.DR
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'SC', 'TM'])
 
     def STA_instruction(self):
@@ -211,14 +252,14 @@ class CPU:
         self.block()
 
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['TM'])
 
 
     def BR_instruction(self):
         self.PC = self.AR
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2)  
+        self.TM = Hex(self.TM) - Hex('1')  
 
         self.block(['PC', 'TM', 'SC'])
 
@@ -226,14 +267,14 @@ class CPU:
         self.DR = self.main_memory[int(self.AR, 16)]
         self.block(['DR'])
 
-        self.DR = self.hex_op(self.DR, '1', func = self.minus)
+        self.DR = Hex(self.DR,3) - Hex('1',3)
         self.block(['DR'])
 
         self.main_memory[int(self.AR, 16)] = self.DR
         if self.DR == self.AC:
-            self.PC = self.hex_op(self.PC, '1', bits = 2) 
+            self.PC = Hex(self.PC) + Hex('1') 
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['DR', 'PC', 'TM', 'SC'])
 
     def SWT_instruction(self):
@@ -270,9 +311,9 @@ class CPU:
         self.S = 1
         self.TM = self.main_memory[int(self.AR, 16)]
         if self.PSR["S"] == 0:
-            self.NS -= self.hex_op(self.NS, '1', func = self.minus, bits = 2) 
+            self.NS = Hex(self.NS) - Hex('1')
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'TM', 'NS', 'SC', 'TM'])
     
 
@@ -285,118 +326,120 @@ class CPU:
 
         if self.PSR["S"] == 1:
             self.PC = self.hex_op(self.PC, '1', func = self.minus) 
+            self.PC = Hex(self.PC) - Hex('1')
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'])
 
     def CLE_instruction(self):
         self.E = 0
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['E', 'SC', 'TM'])
 
     def CMA_instruction(self):
         self.AC = ~self.AC & ((1 << 12) - 1)  
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'SC', 'TM'])
 
     def CME_instruction(self):
         self.E = ~self.E & ((1 << 12) - 1)
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['E', 'SC', 'TM'])
 
     def CIR_instruction(self):
 
         Lsb = self.AC & 1 
-        self.AC = self.hex_op(self.AC, '0', func= lambda x, y: (x >> 1) | (self.E << 11))
+        self.AC = Hex(bits=3)._hex(int(self.AC, 16) >> 1 | (self.E << 11))
         self.E = Lsb
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'E', 'SC', 'TM'])
 
     def CIL_instruction(self):
         Msb = (self.AC >> 11) & 1
-        self.AC = self.hex_op(self.AC, '0', func= lambda x, y: ((self.AC << 1) & ((1 << 12) - 1)) | self.E)
+        # self.AC = self.hex_op(self.AC, '0', func= lambda x, y: ((self.AC << 1) & ((1 << 12) - 1)) | self.E)
+        self.AC = Hex(bits=3)._hex(((int(self.AC, 16) << 1) & ((1 << 12) - 1)) | self.E)
         self.E = Msb
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'E', 'SC', 'TM'])
 
 
     def SZA_instruction(self):
         if self.AC == 0:
-            self.PC = self.hex_op(self.PC, '1', bits = 2) 
+            self.PC = Hex(self.PC) + Hex('1') 
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'])
 
     def SZE_instruction(self):
         if self.E == 0:
-            self.PC = self.hex_op(self.PC, '1', bits = 2)     
+            self.PC = Hex(self.PC) + Hex('1')     
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'])
 
     def ICA_instruction(self):
-        self.AC += self.hex_op(self.TM, '1')
+        self.AC = Hex(self.AC) + Hex('1')
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'SC', 'TM'])
 
     def ESW_instruction(self):
         self.SW = 1
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SW', 'SC', 'TM'])
 
     def DSW_instruction(self):
         self.SW = 0
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SW', 'SC', 'TM'])
     
     def ADD_instruction(self):
         self.A0 = 0
         self.A1 = 0
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['A0', 'A1', 'SC', 'TM'])
     
     def SUB_instruction(self):
         self.A0 = 1
         self.A1 = 0
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['A0', 'A1', 'TM', 'SC']) 
 
     def AND_instruction(self):
         self.A0 = 0
         self.A1 = 1
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['A0', 'A1', 'TM', 'SC'])
 
     def OR_instruction(self):
         self.A0 = 1
         self.A1 = 1
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['A0', 'A1', 'TM', 'SC'])
 
     def HLT_instruction(self):
         self.S = 0
-        self.NS = self.hex_op(self.NS, '1', bits = 2)
+        self.NS = Hex(self.NS) + Hex('1')
+        self.PC = Hex(self.PC) - Hex('1')
         self.block(['S', 'NS'])
 
-        if self.NS == self.TP:
+        if Hex(self.NS) == Hex(self.TP):
             self.GS = 0
         self.S = 0
-        self.PC = self.hex_op(self.PC, '1', funct=self.minus, bits=2)
         self.C = 1
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['S', 'GS', 'PC', 'C', 'SC', 'TM'])
 
     def FORK_instruction(self):
@@ -407,7 +450,7 @@ class CPU:
         self.PSR["A1"] = self.A1
         self.PSR["S"] = self.S
         self.AR = self.TP
-        self.TP = self.hex_op(self.TM, '1', bits = 2) 
+        self.TP = Hex(self.TP) + Hex('1')
         self.block(['PSR', 'AR', 'TP'])
 
 
@@ -416,7 +459,7 @@ class CPU:
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SC', 'TM'])
 
     def RST_instruction(self):
@@ -465,7 +508,7 @@ class CPU:
         self.A1 = self.PSR["A1"]
         self.S = self.PSR["S"]
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'AC', 'A0', 'A1', 'S', 'E', 'SC', 'TM'])
 
     def SPA_instruction(self):
@@ -473,52 +516,52 @@ class CPU:
         self.block(['AR'])
 
         if self.main_memory[int(self.AR, 16)] == self.AC:
-            self.PC = self.hex_op(self.PC, '1', bits = 2) 
+            self.PC = Hex(self.PC) + Hex('1') 
 
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SC', 'TM'])
 
     def INP_instruction(self):
         self.AC = self.INPR
         self.FGI = 0
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'FGI', 'SC', 'TM'])
     
     def OUT_instruction(self):
         self.OUTR = self.AC
         self.FGO = 0
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['OUTR', 'FGO', 'SC', 'TM'])
 
     def SKI_instruction(self):
         if self.FGI == 1:
-            self.PC = self.hex_op(self.PC, '1', bits = 2) 
+            self.PC = Hex(self.PC) + Hex('1') 
         
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'])
 
     def SKO_instruction(self):
         if self.FGO == 1:
-            self.PC = self.hex_op(self.PC, '1', bits = 2) 
+            self.PC = Hex(self.PC) + Hex('1') 
         
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'])
 
     def EI_instruction(self):
         self.IEN = 1
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['IEN', 'SC', 'TM'])
 
     def DI_instruction(self):
         self.IEN = 0
         self.SC = 0
-        self.TM = self.hex_op(self.TM, '1', func = self.minus, bits = 2) 
+        self.TM = Hex(self.TM) - Hex('1') 
         self.block(['IEN', 'SC', 'TM'])
 
 
