@@ -159,9 +159,9 @@ class CPU:
     @staticmethod
     def minus(x, y): return x - y
 
-    def block(self, changed_var = []): 
+    def block(self, changed_var = [], last = False): 
         print(f"Changed Vars: {changed_var}")
-        print(f"Parent Function: {inspect.stack()[1].function}")
+        print(f"Fetch {inspect.stack()[1].function}")
 
         self.changed_vars = changed_var
         self.update_ui = True
@@ -170,8 +170,10 @@ class CPU:
 
         if self.running:
             sleep(1/self.clk) 
-        else: 
+        elif last == False and self.stepping: 
             while self.execute == False: pass
+        
+        if last == True: self.stepping = False
 
         # print(f"comming out of block with parent function {inspect.stack()[1].function}")
 
@@ -218,7 +220,7 @@ class CPU:
         if (self.S == 0):
             self.C = 1
         self.SC = 0
-        self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'C'])
+        self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'C'], True)
 
     def CAL_instruction(self):
         self.DR = self.main_memory[int(self.AR, 16)]
@@ -236,7 +238,7 @@ class CPU:
             self.AC = Hex(self.AC,3) | Hex(self.DR,3)
 
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['AC', 'TM'])
+        self.block(['AC', 'TM'], True)
 
     def LDA_instruction(self):
         self.DR = self.main_memory[int(self.AR, 16)]
@@ -245,15 +247,15 @@ class CPU:
         self.AC = self.DR
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['AC', 'SC', 'TM'])
+        self.block(['AC', 'SC', 'TM'], True)
 
     def STA_instruction(self):
         self.main_memory[int(self.AR, 16)] = self.AC
-        self.block()
+        self.block(['M'])
 
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['TM'])
+        self.block(['TM'], True)
 
 
     def BR_instruction(self):
@@ -261,7 +263,7 @@ class CPU:
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1')  
 
-        self.block(['PC', 'TM', 'SC'])
+        self.block(['PC', 'TM', 'SC'], True)
 
     def ISA_instruction(self):
         self.DR = self.main_memory[int(self.AR, 16)]
@@ -275,7 +277,7 @@ class CPU:
             self.PC = Hex(self.PC) + Hex('1') 
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['DR', 'PC', 'TM', 'SC'])
+        self.block(['DR', 'PC', 'TM', 'SC'], True)
 
     def SWT_instruction(self):
         self.PSR["PC"] = self.PC
@@ -314,7 +316,7 @@ class CPU:
             self.NS = Hex(self.NS) - Hex('1')
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'TM', 'NS', 'SC', 'TM'])
+        self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'TM', 'NS', 'SC', 'TM'], True)
     
 
     def AWT_instruction(self):
@@ -329,25 +331,25 @@ class CPU:
             self.PC = Hex(self.PC) - Hex('1')
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['PC', 'SC', 'TM'])
+        self.block(['PC', 'SC', 'TM'], True)
 
     def CLE_instruction(self):
         self.E = 0
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['E', 'SC', 'TM'])
+        self.block(['E', 'SC', 'TM'], True)
 
     def CMA_instruction(self):
         self.AC = ~self.AC & ((1 << 12) - 1)  
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['AC', 'SC', 'TM'])
+        self.block(['AC', 'SC', 'TM'], True)
 
     def CME_instruction(self):
         self.E = ~self.E & ((1 << 12) - 1)
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['E', 'SC', 'TM'])
+        self.block(['E', 'SC', 'TM'], True)
 
     def CIR_instruction(self):
 
@@ -356,7 +358,7 @@ class CPU:
         self.E = Lsb
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['AC', 'E', 'SC', 'TM'])
+        self.block(['AC', 'E', 'SC', 'TM'], True)
 
     def CIL_instruction(self):
         Msb = (self.AC >> 11) & 1
@@ -365,7 +367,7 @@ class CPU:
         self.E = Msb
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['AC', 'E', 'SC', 'TM'])
+        self.block(['AC', 'E', 'SC', 'TM'], True)
 
 
     def SZA_instruction(self):
@@ -373,66 +375,66 @@ class CPU:
             self.PC = Hex(self.PC) + Hex('1') 
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['PC', 'SC', 'TM'])
+        self.block(['PC', 'SC', 'TM'], True)
 
     def SZE_instruction(self):
         if self.E == 0:
             self.PC = Hex(self.PC) + Hex('1')     
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['PC', 'SC', 'TM'])
+        self.block(['PC', 'SC', 'TM'], True)
 
     def ICA_instruction(self):
         self.AC = Hex(self.AC) + Hex('1')
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['AC', 'SC', 'TM'])
+        self.block(['AC', 'SC', 'TM'], True)
 
     def ESW_instruction(self):
         self.SW = 1
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['SW', 'SC', 'TM'])
+        self.block(['SW', 'SC', 'TM'], True)
 
     def DSW_instruction(self):
         self.SW = 0
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['SW', 'SC', 'TM'])
-    
+        self.block(['SW', 'SC', 'TM'], True)
+
     def ADD_instruction(self):
         self.A0 = 0
         self.A1 = 0
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['A0', 'A1', 'SC', 'TM'])
+        self.block(['A0', 'A1', 'SC', 'TM'], True)
     
     def SUB_instruction(self):
         self.A0 = 1
         self.A1 = 0
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['A0', 'A1', 'TM', 'SC']) 
+        self.block(['A0', 'A1', 'TM', 'SC'], True) 
 
     def AND_instruction(self):
         self.A0 = 0
         self.A1 = 1
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['A0', 'A1', 'TM', 'SC'])
+        self.block(['A0', 'A1', 'TM', 'SC'], True)
 
     def OR_instruction(self):
         self.A0 = 1
         self.A1 = 1
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['A0', 'A1', 'TM', 'SC'])
+        self.block(['A0', 'A1', 'TM', 'SC'], True)
 
     def HLT_instruction(self):
         self.S = 0
         self.NS = Hex(self.NS) + Hex('1')
         self.PC = Hex(self.PC) - Hex('1')
-        self.block(['S', 'NS'])
+        self.block(['S', 'NS'], True)
 
         if Hex(self.NS) == Hex(self.TP):
             self.GS = 0
@@ -440,7 +442,7 @@ class CPU:
         self.C = 1
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['S', 'GS', 'PC', 'C', 'SC', 'TM'])
+        self.block(['S', 'GS', 'PC', 'C', 'SC', 'TM'], True)
 
     def FORK_instruction(self):
         self.PSR["PC"] = self.PC
@@ -460,7 +462,7 @@ class CPU:
         self.secondary_memory[int(self.TAR, 16)] = self.PSR
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['SC', 'TM'])
+        self.block(['SC', 'TM'], True)
 
     def RST_instruction(self):
         self.AR = self.PRC
@@ -481,7 +483,7 @@ class CPU:
         self.S = 0
         self.SC = 0
         self.C = 1
-        self.block(['PSR', 'S', 'SC'])
+        self.block(['PSR', 'S', 'SC'], True)
 
 
     def UTM_instruction(self):
@@ -489,7 +491,7 @@ class CPU:
         self.block(['AR'])
         self.TM = self.main_memory[int(self.AR, 16)]
         self.SC = 0
-        self.block(['TM', 'SC'])
+        self.block(['TM', 'SC'], True)
 
     def LDP_instruction(self):
         self.AR = self.PRC
@@ -509,7 +511,7 @@ class CPU:
         self.S = self.PSR["S"]
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['PC', 'AC', 'A0', 'A1', 'S', 'E', 'SC', 'TM'])
+        self.block(['PC', 'AC', 'A0', 'A1', 'S', 'E', 'SC', 'TM'], True)
 
     def SPA_instruction(self):
         self.AR = self.PRC
@@ -520,21 +522,21 @@ class CPU:
 
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['SC', 'TM'])
+        self.block(['SC', 'TM'], True)
 
     def INP_instruction(self):
         self.AC = self.INPR
         self.FGI = 0
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['AC', 'FGI', 'SC', 'TM'])
+        self.block(['AC', 'FGI', 'SC', 'TM'], True)
     
     def OUT_instruction(self):
         self.OUTR = self.AC
         self.FGO = 0
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['OUTR', 'FGO', 'SC', 'TM'])
+        self.block(['OUTR', 'FGO', 'SC', 'TM'],True)
 
     def SKI_instruction(self):
         if self.FGI == 1:
@@ -542,7 +544,7 @@ class CPU:
         
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['PC', 'SC', 'TM'])
+        self.block(['PC', 'SC', 'TM'], True)
 
     def SKO_instruction(self):
         if self.FGO == 1:
@@ -550,19 +552,19 @@ class CPU:
         
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['PC', 'SC', 'TM'])
+        self.block(['PC', 'SC', 'TM'], True)
 
     def EI_instruction(self):
         self.IEN = 1
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['IEN', 'SC', 'TM'])
+        self.block(['IEN', 'SC', 'TM'], True)
 
     def DI_instruction(self):
         self.IEN = 0
         self.SC = 0
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['IEN', 'SC', 'TM'])
+        self.block(['IEN', 'SC', 'TM'], True)
 
 
     def run_next(self):

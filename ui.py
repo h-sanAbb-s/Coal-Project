@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog
-from cpu import CPU
+from cpu import CPU, Hex
 import yaml
 import threading
 import time
@@ -51,8 +51,6 @@ class UI:
 
     def step_code(self):
         if self.cpu.stepping == False: 
-            # self.prev_changed_values = self.registers_names + self.flip_flops_names
-            # self.clear_selected()
             self.step_running = threading.Thread(target = self.cpu.run_next,daemon=True)
             self.step_running.start()
 
@@ -91,12 +89,15 @@ class UI:
         else:
             print("No file selected")
 
+        self.cpu.stepping = False
+        time.sleep(0.1)
         self.cpu.__init__()
+
         file = open(file_path, 'r') 
         config = yaml.safe_load(file)
         if 'REG' in config: 
             for r, v in config['REG'].items(): 
-                setattr(self.cpu, r, str(v))
+                setattr(self.cpu, r, Hex(str(v)).val)
 
         if 'FF' in config: 
             for f, v in config['FF'].items(): 
@@ -105,13 +106,26 @@ class UI:
         if 'M' in config: 
             for l, v in config['M'].items(): 
                 l = int(str(l), 16)
-                self.cpu.main_memory[l] = str(v)
+                if isinstance(v, list): 
+                    for i, _v in enumerate(v): 
+                        _v = str(_v)
+                        if len(_v) == 1: self.cpu.main_memory[i+l] = Hex(_v).val
+                        else: self.cpu.main_memory[i+l] = _v
+                else: 
+                    v = str(v)
+                    if len(v) == 1: self.cpu.main_memory[l] = Hex(v).val
+                    else: self.cpu.main_memory[l] = v 
+                    
+
+
+
+
         if 'M2' in config: 
             for l, p in config['M2'].items(): 
                 l = int(str(l), 16)
-                p['PC'] = str(p['PC'])
-                p['PC0'] = str(p['PC0'])
-                p['AC'] = str(p['AC'])
+                p['PC'] = Hex(str(p['PC'])).val
+                p['PC0'] = Hex(str(p['PC0'])).val
+                p['AC'] = Hex(str(p['AC'])).val
                 self.cpu.secondary_memory[l] = p 
                     
         self.update_ui()
@@ -271,15 +285,18 @@ class UI:
             if entry is not None : 
                 entry.config(bg='white', fg='black')
 
-        mem_pointer = 'PC'
+        mem_pointer = 'AR'
         for r in self.cpu.changed_vars: 
             entry = None
             if r in self.registers: 
-                if self.registers == 'AR': mem_pointer = 'AC'
+                # if r == 'AR': mem_pointer = 'AR'
+                # if r == 'PRC': mem_pointer = 'PRC'
                 (var, entry) = self.registers[r]
+    
             elif r in self.flip_flops: 
                 (var, entry) = self.flip_flops[r]
-            
+
+            # if r == 'M': mem_pointer = 'AR' 
             if entry is not None : 
                 entry.config(bg='blue', fg='white')
                 var.set(getattr(self.cpu, r))
@@ -291,7 +308,7 @@ class UI:
         self.main_memory_table.focus(row_id)
         self.main_memory_table.see(row_id)
 
-        address = getattr(self.cpu, 'PC')
+        address = getattr(self.cpu, 'AR')
         row_id = self.main_memory_table.get_children()[int(address,16)] 
         self.main_memory_table.item(row_id, values=(address, self.cpu.main_memory[int(address, 16)],))
 
