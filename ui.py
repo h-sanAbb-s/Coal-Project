@@ -116,7 +116,7 @@ class UI:
         file_path = filedialog.askopenfilename(title="Select a file", filetypes=(("Yaml Files", "*.yaml"),))
 
         if file_path is None or file_path == '': 
-            print('Cannot load file')
+            messagebox.showerror(message='Cannot Load file')
             return 
 
         print(f"{file_path} is loaded")
@@ -162,13 +162,13 @@ class UI:
                         for i, _v in enumerate(v): 
                             _v = str(_v)
                             if len(_v): 
-                                if len(_v.split()) <= 3: self.cpu.main_memory[i+l] = _v
-                                else: raise ValueError(f"Invalid instruction/operand at location {Hex(str(l)).val}: {_v}")
+                                if len(_v.split()) <= 3: self.cpu.main_memory[i+l] = _v.strip()
+                                else: raise ValueError(f"Invalid instruction/operand at location {Hex(str(l)).val}: {_v.strip()}")
                     else: 
                         v = str(v)
                         if len(v): 
-                            if len(v.split()) <= 3: self.cpu.main_memory[l] = v
-                            else: raise ValueError(f"Invalid instruction/operand at location {Hex(str(l)).val}: {v}")
+                            if len(v.split()) <= 3: self.cpu.main_memory[l] = v.strip()
+                            else: raise ValueError(f"Invalid instruction/operand at location {Hex(str(l)).val}: {v.strip()}")
                         
             if 'M2' in config: 
                 for l, p in config['M2'].items(): 
@@ -184,7 +184,7 @@ class UI:
 
             if self.cpu.main_memory[8] == '': raise ValueError('Time value not specified at location 8')
             self.cpu.TM = Hex(self.cpu.main_memory[8]).val
-            self.cpu.TP = Hex(str(len(config['M2'])),1).val if 'M2' in config else '0'
+            self.cpu.TP = Hex(str(len(config['M2'])),1).val if 'M2' in config else '1'
             self.cpu.changed_vars.append('TM')
             self.cpu.changed_vars.append('TP')
         
@@ -192,15 +192,10 @@ class UI:
             messagebox.showerror(message=v)
             self.cpu.__init__(self.cpu.clk)
 
-
         self.loading = False 
+        self.cpu.memory_ptr = 'PC'
         self.update_ui()
         self.update_selected_ui()
-        # except: 
-        #     print(f"Error in program file: f{file_path}")
-        #     self.cpu.__init__()
-        #     self.loading = False
-        #     return
     
 
     def create_flip_flops_panel(self, frame):
@@ -487,7 +482,7 @@ class UI:
             else: 
                 val = str(val)
             if val != self.prev_state[reg]: 
-                if reg == 'AR': mem_pointer = 'AR'
+                # if reg == 'AR': mem_pointer = 'AR'
                 entry.config(bg='blue', fg='white')
                 self.prev_state[reg] = val
                 self.prev_changed_values.append(reg)
@@ -497,11 +492,10 @@ class UI:
             var.set(val)
 
         # Update main memory
-        row_id = self.main_memory_table.get_children()[int(getattr(self.cpu, mem_pointer),16)] 
-        if int(getattr(self.cpu, 'GS')) == 1: 
-            self.main_memory_table.selection_set(row_id)  
-            self.main_memory_table.focus(row_id)
-            self.main_memory_table.see(row_id)
+        row_id = self.main_memory_table.get_children()[int(getattr(self.cpu, 'PC'),16)] 
+        self.main_memory_table.selection_set(row_id)  
+        self.main_memory_table.focus(row_id)
+        self.main_memory_table.see(row_id)
 
         if selected: 
             address = getattr(self.cpu, 'PC')

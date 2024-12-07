@@ -332,17 +332,17 @@ class CPU:
 
 
     def BR_instruction(self):
-        self.PC = self.AR
+        self.PC = Hex(self.AR).val
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1')  
 
         self.block(['PC', 'TM', 'SC'], True)
 
     def ISA_instruction(self):
-        self.DR = self.main_memory[int(self.AR, 16)]
+        self.DR = Hex(self.main_memory[int(self.AR, 16)],3).val
         self.block(['DR'])
 
-        self.DR = Hex(self.DR,3) - Hex('1',3)
+        self.DR = Hex(self.DR,3) + Hex('1',3)
         self.block(['DR'])
 
         self.main_memory[int(self.AR, 16)] = self.DR
@@ -428,20 +428,20 @@ class CPU:
         self.block(['E', 'SC', 'TM'], True)
 
     def CMA_instruction(self):
-        self.AC = ~self.AC & ((1 << 12) - 1)  
+        self.AC = Hex(bits=3)._hex(~int(self.AC,16) & ((1 << 12) - 1))
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'SC', 'TM'], True)
 
     def CME_instruction(self):
-        self.E = ~self.E & ((1 << 12) - 1)
+        self.E = ~self.E % 2
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['E', 'SC', 'TM'], True)
 
     def CIR_instruction(self):
 
-        Lsb = self.AC & 1 
+        Lsb = int(self.AC, 16) & 1 
         self.AC = Hex(bits=3)._hex(int(self.AC, 16) >> 1 | (self.E << 11))
         self.E = Lsb
         self.SC = Hex('0',1).val
@@ -449,7 +449,7 @@ class CPU:
         self.block(['AC', 'E', 'SC', 'TM'], True)
 
     def CIL_instruction(self):
-        Msb = (self.AC >> 11) & 1
+        Msb = (int(self.AC,16) >> 11) & 1
         # self.AC = self.hex_op(self.AC, '0', func= lambda x, y: ((self.AC << 1) & ((1 << 12) - 1)) | self.E)
         self.AC = Hex(bits=3)._hex(((int(self.AC, 16) << 1) & ((1 << 12) - 1)) | self.E)
         self.E = Msb
@@ -459,7 +459,7 @@ class CPU:
 
 
     def SZA_instruction(self):
-        if self.AC == 0:
+        if Hex(self.AC, 3) == Hex('0'):
             self.PC = Hex(self.PC) + Hex('1') 
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 

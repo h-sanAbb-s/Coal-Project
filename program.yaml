@@ -1,5 +1,5 @@
 REG: 
-    PC: 0D #required field
+    PC: 1B #required field
     TP: 1 #required to indicate the total number of processes
 FF:
     GS: 1    
@@ -26,9 +26,10 @@ M:
         - 12 
         - 0
         - LDA 0A
-        - ADD
+        - SUB
         - CAL 0B
-        - STA 0C
+        - SZA 
+        - BR 0D
         - HLT 
 
     14: 
@@ -37,33 +38,28 @@ M:
         - LDP 
     
     1A: 
-        - 3AB
-        - 3CA
-        - 0
+        - 00F
         - LDA 1A
-        - SUB
-        - CAL 1B
-        - STA 1C
-        - LDP
-        - RST 
+        - CIR
+        - HLT
 
-M2: 
-    0: 
-        PC: 0D
-        PC0: 0A
-        AC: 0
-        S: 1
-        A0: 0
-        A1: 0
-        E: 0
-    1: 
-        PC: 1D
-        PC0: 1D
-        AC: 0
-        S: 1
-        A0: 0
-        A1: 0
-        E: 0
+# M2: 
+#     0: 
+#         PC: 0D
+#         PC0: 0A
+#         AC: 0
+#         S: 1
+#         A0: 0
+#         A1: 0
+#         E: 0
+#     1: 
+#         PC: 1D
+#         PC0: 1D
+#         AC: 0
+#         S: 1
+#         A0: 0
+#         A1: 0
+#         E: 0
         
 
 
