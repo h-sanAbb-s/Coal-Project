@@ -40,7 +40,7 @@ class Hex():
 
 
 class CPU:
-    def __init__(self):
+    def __init__(self, freq = 1):
         self.AR = Hex(bits=2).val   # Address Register (8 bits)
         self.PC = Hex(bits=2).val     # Program Counter (8 bits)
         self.DR = Hex(bits=3).val     # Data Register (12 bits)
@@ -70,7 +70,7 @@ class CPU:
         self.GS = 0     # General Status Flip-Flop
         self.A0 = 0     # A0 Flip-Flop
         self.A1 = 0     # A1 Flip-Flop
-        self.clk = 1
+        self.clk = freq
 
 
         self.running = False
@@ -79,6 +79,7 @@ class CPU:
         self.lock = threading.Lock()
         self.ui = None
         self.update_ui = False 
+        self.memory_ptr = 'AR'
 
         # Main Memory (256 words, each 12 bits)
 
@@ -181,21 +182,24 @@ class CPU:
         # print(f"Changed Vars: {changed_var}")
         # print(f"Fetch {inspect.stack()[1].function}")
 
-        if last == False: 
+        if last: 
+            self.changed_vars = changed_var + ['C']
+            if Hex(self.TM) == Hex('0'): 
+                self.C = self.SW
+                self.stepping = False
+            
+            self.memory_ptr = 'PC'
+        else: 
             self.changed_vars = changed_var + ['SC']
             self.SC = Hex(self.SC,1) + Hex('1')
-        else: 
-            self.changed_vars = changed_var
-            if Hex(self.TM) == Hex('0'): 
-                self.C = 1
-                self.changed_vars += ['C']
+            self.memory_ptr = 'AR'
         
         self.update_ui = True
 
-        # if self.running:
+        if not self.running and last: return
         sleep(1/self.clk) 
         while self.update_ui: pass
-
+        
         # if last == True: 
         #     self.stepping = False
         #     return
@@ -203,27 +207,27 @@ class CPU:
         # with self.lock: 
         #     self.execute = False 
 
-
-        # if self.stepping and not self.running: 
+        # if self.stepping and not self.running and not last: 
         #     while self.execute == False and self.stepping and self.running == False: pass
         #     if self.running: 
         #         sleep(1/self.clk) 
         #         while self.update_ui: pass
         
-
         # print(f"comming out of block with parent function {inspect.stack()[1].function}")
 
 
     def contextSwitch(self):
+        self.PSR["S"] = self.S
+        self.PSR["A1"] = self.A1
+        self.PSR["A0"] = self.A0
+        self.PSR["E"] = self.E
         self.PSR["PC"] = self.PC
         self.PSR["AC"] = self.AC
-        self.PSR["E"] = self.E
-        self.PSR["A0"] = self.A0
-        self.PSR["A1"] = self.A1
-        self.PSR["S"] = self.S
         self.AR = self.PRC
         temp = int(self.main_memory[int(self.AR, 16)], 16)
         self.PSR["PC0"] = self.secondary_memory[temp]['PC0']
+
+        # breakpoint()
         self.block(['AR', 'PSR'])
 
         self.TAR = self.main_memory[int(self.AR, 16)]
@@ -233,8 +237,8 @@ class CPU:
         self.PRC = Hex(self.PRC, 1) + Hex('1')
         self.block(['AR', 'PRC'])
 
-        self.secondary_memory[int(self.TAR, 16)] = self.PSR
-        self.TM = self.main_memory[int(self.AR, 16)]
+        self.secondary_memory[int(self.TAR, 16)] = self.PSR.copy()
+        self.TM = Hex(self.main_memory[int(self.AR, 16)]).val
         if (self.PRC == self.TP):
             self.PRC = Hex('0', 1).val
         self.block(['PRC', 'TM'])        
@@ -245,7 +249,7 @@ class CPU:
         self.TAR = self.main_memory[int(self.AR, 16)]
         self.block(['TAR'])
 
-        self.PSR = self.secondary_memory[int(self.TAR, 16)]
+        self.PSR = self.secondary_memory[int(self.TAR, 16)].copy()
         self.block(['PSR'])
 
         self.PC = self.PSR["PC"]
@@ -325,8 +329,9 @@ class CPU:
         self.PSR["A0"] = self.A0
         self.PSR["A1"] = self.A1
         self.PSR["S"] = self.S
-        
-        self.TR = self.main_memory[int(self.AR, 16)]
+        temp = int(self.main_memory[int(self.PRC, 16)], 16)
+        self.PSR["PC0"] = self.secondary_memory[temp]['PC0']
+        self.TR = Hex(self.AR,3).val 
         self.block(['PSR', 'TR'])
 
         self.AR = self.PRC
@@ -335,12 +340,16 @@ class CPU:
         self.TAR = self.main_memory[int(self.AR, 16)]
         self.block(['TAR'])
 
-        self.secondary_memory[int(self.TAR, 16)] = self.PSR
-        self.TAR = self.TR
-        self.block(['TAR'])
+        self.secondary_memory[int(self.TAR, 16)] = self.PSR.copy()
+        self.PRC = Hex(self.TR, 1).val
+        self.AR = Hex(self.TR, 2).val
+        self.block(['PRC', 'AR'])
         
 
-        self.PSR = self.secondary_memory[int(self.TAR, 16)]
+        self.TAR = self.main_memory[int(self.AR, 16)]
+        self.block(['TAR'])
+
+        self.PSR = self.secondary_memory[int(self.TAR, 16)].copy()
         self.AR = '08'
         self.block(['PSR', 'AR'])
 
@@ -362,15 +371,16 @@ class CPU:
         self.TAR = self.main_memory[int(self.AR, 16)]
         self.block(['TAR'])
 
-        self.PSR = self.secondary_memory[int(self.TAR, 16)]
+        self.PSR = self.secondary_memory[int(self.TAR, 16)].copy()
         self.block(['PSR'])
 
         if self.PSR["S"] == 1:
-            self.PC = self.hex_op(self.PC, '1', func = self.minus) 
             self.PC = Hex(self.PC) - Hex('1')
+            self.C = 1
+        
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
-        self.block(['PC', 'SC', 'TM'], True)
+        self.block(['PC', 'C', 'SC', 'TM'], True)
 
     def CLE_instruction(self):
         self.E = 0
@@ -470,8 +480,9 @@ class CPU:
         self.block(['A0', 'A1', 'TM', 'SC'], True)
 
     def HLT_instruction(self):
+        if self.S: 
+            self.NS = Hex(self.NS, 1) + Hex('1')
         self.S = 0
-        self.NS = Hex(self.NS) + Hex('1')
         self.PC = Hex(self.PC) - Hex('1')
         self.block(['S', 'NS'])
 
@@ -498,7 +509,7 @@ class CPU:
         self.TAR = self.main_memory[int(self.AR, 16)]
         self.block(['TAR'])
 
-        self.secondary_memory[int(self.TAR, 16)] = self.PSR
+        self.secondary_memory[int(self.TAR, 16)] = self.PSR.copy()
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SC', 'TM'], True)
@@ -510,7 +521,7 @@ class CPU:
         self.TAR =  self.main_memory[int(self.AR, 16)]
         self.block(['TAR'])
 
-        self.PSR = self.secondary_memory[int(self.TAR, 16)]
+        self.PSR = self.secondary_memory[int(self.TAR, 16)].copy()
         self.block(['PSR'])
 
         self.PSR["PC"] = self.PSR["PC0"]
@@ -519,9 +530,16 @@ class CPU:
         self.PSR["A0"] = 0
         self.PSR["A1"] = 0
         self.PSR["E"] = 0
-        self.S = 0
+        self.PC = self.PSR['PC0']
+        self.AC = Hex('0', 3).val
+        self.A0, self.A1, self.E = 0,0,0
+        self.block(['PSR', 'PC', 'AC', 'A0', 'A1', 'S', 'E'])
+
+        self.secondary_memory[int(self.TAR,16)] = self.PSR.copy()
         self.SC = Hex('0',1).val
         self.C = 1
+        if not self.S: self.NS = Hex(self.NS,1) - Hex('0')
+        self.S = 0
         self.block(['PSR', 'S', 'SC'], True)
 
 
@@ -608,8 +626,7 @@ class CPU:
 
     def run_next(self):
         self.stepping = True
-        if self.TM == '00' and self.SW:
-                self.C = 1
+        if (self.C and self.SW) or not self.S:
                 self.contextSwitch()
         else:
             self.fetch()
@@ -623,6 +640,7 @@ class CPU:
             else:
                 messagebox.showerror(message=f'unkown instruction {opcode}')
 
+        # print(self.secondary_memory)
 
         print('Thread exited')
         self.stepping = False

@@ -58,14 +58,16 @@ class UI:
             self.run_button.config(state='disabled')
             self.step_button.config(state='disabled')
             while self.cpu.stepping and not self.load_button: pass
+            if self.cpu.GS == 0: 
+                if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
+                self.cpu.running = False
+                self.cpu.stepping = False
+
             self.load_button.config(state='normal')
             self.run_button.config(state='normal')
             self.step_button.config(state='normal')
 
 
-        if self.cpu.GS == 0: 
-            if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
-            return 
 
         if self.cpu.stepping == False: 
             try: 
@@ -74,6 +76,9 @@ class UI:
                 messagebox.showerror(message=v)
             if buttons: threading.Thread(target=update_buttons, daemon=True).start()
 
+        # else: 
+        #     with self.cpu.lock: 
+        #         self.cpu.execute = True
 
 
     def run_code(self):
@@ -81,6 +86,7 @@ class UI:
             while True and self.cpu.running:
                 if self.cpu.stepping == False: 
                     self.step_code(False)
+
     
                 if self.cpu.GS == 0: 
                     # if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
@@ -118,7 +124,7 @@ class UI:
         self.cpu.running = False
         self.loading = True
         time.sleep(0.1)
-        self.cpu.__init__()
+        self.cpu.__init__(self.cpu.clk)
 
         self.cpu.changed_vars = []
         try: 
@@ -183,7 +189,7 @@ class UI:
         
         except ValueError as v: 
             messagebox.showerror(message=v)
-            self.cpu.__init__()
+            self.cpu.__init__(self.cpu.clk)
 
 
         self.loading = False 
@@ -244,7 +250,7 @@ class UI:
 
         self.registers = {}
         for i, reg in enumerate(self.registers_names):
-            width = 12 if reg != 'PSR' else 16
+            width = 12 if reg != 'PSR' else 17 
             if reg == 'PSR':
                 psr_value = getattr(self.cpu, reg, {})
                 formatted_psr = '-'.join(str(value) for key, value in psr_value.items())
@@ -356,11 +362,11 @@ class UI:
 
         selected_option = tk.StringVar()
         selected_option.set(str(self.cpu.clk)+"hz")
-        options = ["0.5hz", "1hz", "3hz"]
+        options = ["0.2hz", "0.5hz", "1hz", "5hz"]
         dropdown = tk.OptionMenu(button_frame, selected_option, *options)
         dropdown.config(bg='white')
         
-        # Position the buttons in the gridk
+        # Position the buttons in the grid
         self.load_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         self.step_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         self.run_button.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
@@ -397,7 +403,6 @@ class UI:
                 if r in self.can_edit: entry.config(bg='yellow', fg='black')
                 else: entry.config(bg='white', fg='black')
 
-        mem_pointer = 'AR'
         for r in self.cpu.changed_vars: 
             entry = None
             if r in self.registers: 
@@ -420,11 +425,12 @@ class UI:
         
         self.prev_changed_values = self.cpu.changed_vars.copy()
 
-        row_id = self.main_memory_table.get_children()[int(getattr(self.cpu, mem_pointer),16)] 
+        row_id = self.main_memory_table.get_children()[int(getattr(self.cpu, self.cpu.memory_ptr),16)] 
         self.main_memory_table.selection_set(row_id)  
         self.main_memory_table.focus(row_id)
         self.main_memory_table.see(row_id)
 
+        row_id = self.main_memory_table.get_children()[int(getattr(self.cpu, 'AR'),16)] 
         address = getattr(self.cpu, 'AR')
         row_id = self.main_memory_table.get_children()[int(address,16)] 
         self.main_memory_table.item(row_id, values=(address, self.cpu.main_memory[int(address, 16)],))
@@ -432,17 +438,17 @@ class UI:
         pid = int(getattr(self.cpu, 'TAR'))
         # if pid != '': 
         #     pid = int(pid)
+
         row_id = self.secondary_memory_table.get_children()[pid] 
         self.secondary_memory_table.selection_set(row_id)  
         self.secondary_memory_table.focus(row_id)
         self.secondary_memory_table.see(row_id)
 
-        row = self.cpu.secondary_memory[pid]
-        table_id = self.secondary_memory_table.get_children()[pid]
+        row = self.cpu.secondary_memory[pid].copy()
         values = []
         for col in ["S", "A1", "A0", "E", "AC", "PC0", "PC"]:
             values.append(str(row[col]))
-        self.secondary_memory_table.item(table_id, values=values)
+        self.secondary_memory_table.item(row_id, values=values)
 
 
     def clear_selected(self):
