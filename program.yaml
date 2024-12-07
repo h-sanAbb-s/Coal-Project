@@ -1,11 +1,12 @@
 REG: 
-    PC: 0D
-    TP: 1
+    PC: 0D #required field
+    TP: 1 #required to indicate the total number of processes
 FF:
     GS: 1    
     S: 1
+
 M: 
-    00: 
+    00:  #required since the context switching will placed in the following order
         - 0
         - 1
         - 2
@@ -14,9 +15,9 @@ M:
         - 5
         - 6
         - 7
-    08: 3
-    09:
-        - 11
+
+    08: 3 #required since it indicates the time after which context switching will occurr
+    0A:
         - 12
         - 12 
         - 0

@@ -4,7 +4,6 @@ import threading
 
 
 class Hex(): 
-    
     def __init__(self, val = '0', bits = 2): 
         self.bits = bits
         self.val = self._hex(int(val, 16))
@@ -41,20 +40,21 @@ class Hex():
 
 class CPU:
     def __init__(self):
-        self.AR = '0'    # Address Register (8 bits)
-        self.PC = '0'     # Program Counter (8 bits)
-        self.DR = '0'     # Data Register (12 bits)
-        self.AC = '0'     # Accumulator (12 bits)
-        self.INPR = '0'   # Input Register (8 bits)
-        self.IR = '0'     # instruction Register (12 bits)
-        self.TR = '0'     # Temporary Register (12 bits)
-        self.TM = '0'     # Timer Register (8 bits)
-        self.PRC = '0'    # Priority Register (3 bits)
-        self.TAR = '0'    # Target Register (3 bits)
-        self.TP = '0'     # Temporary Pointer (3 bits)
-        self.NS = '0'     # Next State Register (3 bits)
-        self.OUT = '0'    # Output Register (8 bits)
-        self.PSR = {'S': 0, 'A1' : 0, 'A0' : 0, 'E': 0, 'AC': 0, 'PC': 0, 'PC0':0}
+        self.AR = Hex(bits=2).val   # Address Register (8 bits)
+        self.PC = Hex(bits=2).val     # Program Counter (8 bits)
+        self.DR = Hex(bits=3).val     # Data Register (12 bits)
+        self.AC = Hex(bits=3).val     # Accumulator (12 bits)
+        self.INPR = Hex(bits=1).val   # Input Register (8 bits)
+        self.IR = Hex(bits=3).val     # instruction Register (12 bits)
+        self.TR = Hex(bits=3).val     # Temporary Register (12 bits)
+        self.TM = Hex(bits=2).val     # Timer Register (8 bits)
+        self.PRC = Hex(bits=1).val    # Priority Register (3 bits)
+        self.TAR = Hex(bits=1).val    # Table Address Register (3 bits)
+        self.TP = Hex(bits=1).val     # Total Processes (3 bits)
+        self.NS = Hex(bits=1).val     # Number of Stops (3 bits)
+        self.OUT = Hex(bits=1).val    # Output Register (8 bits)
+        self.SC = Hex(bits=1).val
+        self.PSR = {'S': 0, 'A1' : 0, 'A0' : 0, 'E': 0, 'AC': Hex('0',3).val, 'PC0  ': Hex('0').val, 'PC':Hex('0').val}
 
         # Flip-Flops
         self.I = 0      # Interrupt Flip-Flop
@@ -80,6 +80,7 @@ class CPU:
         self.update_ui = False 
 
         # Main Memory (256 words, each 12 bits)
+
         self.main_memory = [''] * 256
 
         # Secondary Memory (8 rows, 7 columns)
@@ -90,6 +91,22 @@ class CPU:
 
         self.changed_vars = []
         ## OTHER GLOBAL VARIABLE
+        self.bits = {
+            'AR' : 2, # Address Register (8 bits)
+            'PC' : 2, # Program Counter (8 bits)
+            'DR' : 3, # Data Register (12 bits)
+            'AC' : 3, # Accumulator (12 bits)
+            'INPR' : 1, # Input Register (8 bits)
+            'IR' : 3, # instruction Register (12 bits)
+            'TR' : 3, # Temporary Register (12 bits)
+            'TM' : 2, # Timer Register (8 bits)
+            'PRC' : 1, # Priority Register (3 bits)
+            'TAR' : 1, # Table Address Register (3 bits)
+            'TP' : 1, # Total Processes (3 bits)
+            'NS' : 1, # Number of Stops (3 bits)
+            'OUT' : 1 # Output Register (8 bits)
+        }
+
         self.instruction_map = {
             "AND": self.AND_instruction,
             "ADD": self.ADD_instruction,
@@ -160,20 +177,35 @@ class CPU:
     def minus(x, y): return x - y
 
     def block(self, changed_var = [], last = False): 
-        print(f"Changed Vars: {changed_var}")
-        print(f"Fetch {inspect.stack()[1].function}")
+        # print(f"Changed Vars: {changed_var}")
+        # print(f"Fetch {inspect.stack()[1].function}")
 
-        self.changed_vars = changed_var
+        if last == False: 
+            self.changed_vars = changed_var + ['SC']
+            self.SC = Hex(self.SC,1) + Hex('1')
+        else: 
+            self.changed_vars = changed_var
+        
         self.update_ui = True
-        with self.lock: 
-            self.execute = False 
 
         if self.running:
             sleep(1/self.clk) 
-        elif last == False and self.stepping: 
-            while self.execute == False: pass
+            while self.update_ui: pass
+
+        if last == True: 
+            self.stepping = False
+            return
+
+        with self.lock: 
+            self.execute = False 
+
+
+        if self.stepping and not self.running: 
+            while self.execute == False and self.stepping and self.running == False: pass
+            if self.running: 
+                sleep(1/self.clk) 
+                while self.update_ui: pass
         
-        if last == True: self.stepping = False
 
         # print(f"comming out of block with parent function {inspect.stack()[1].function}")
 
@@ -219,11 +251,11 @@ class CPU:
         self.C = 0
         if (self.S == 0):
             self.C = 1
-        self.SC = 0
+        self.SC = Hex('0', 1)
         self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'C'], True)
 
     def CAL_instruction(self):
-        self.DR = self.main_memory[int(self.AR, 16)]
+        self.DR = Hex(self.main_memory[int(self.AR, 16)],3).val
         self.block(['DR'])
 
         if self.A0 == 0 and self.A1 == 0:
@@ -238,14 +270,15 @@ class CPU:
             self.AC = Hex(self.AC,3) | Hex(self.DR,3)
 
         self.TM = Hex(self.TM) - Hex('1') 
+        self.SC = Hex('0',1).val
         self.block(['AC', 'TM'], True)
 
     def LDA_instruction(self):
-        self.DR = self.main_memory[int(self.AR, 16)]
+        self.DR = Hex(self.main_memory[int(self.AR, 16)], 3).val
         self.block(['DR'])
 
         self.AC = self.DR
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'SC', 'TM'], True)
 
@@ -253,14 +286,14 @@ class CPU:
         self.main_memory[int(self.AR, 16)] = self.AC
         self.block(['M'])
 
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['TM'], True)
 
 
     def BR_instruction(self):
         self.PC = self.AR
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1')  
 
         self.block(['PC', 'TM', 'SC'], True)
@@ -275,7 +308,7 @@ class CPU:
         self.main_memory[int(self.AR, 16)] = self.DR
         if self.DR == self.AC:
             self.PC = Hex(self.PC) + Hex('1') 
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['DR', 'PC', 'TM', 'SC'], True)
 
@@ -314,7 +347,7 @@ class CPU:
         self.TM = self.main_memory[int(self.AR, 16)]
         if self.PSR["S"] == 0:
             self.NS = Hex(self.NS) - Hex('1')
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'TM', 'NS', 'SC', 'TM'], True)
     
@@ -329,25 +362,25 @@ class CPU:
         if self.PSR["S"] == 1:
             self.PC = self.hex_op(self.PC, '1', func = self.minus) 
             self.PC = Hex(self.PC) - Hex('1')
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'], True)
 
     def CLE_instruction(self):
         self.E = 0
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['E', 'SC', 'TM'], True)
 
     def CMA_instruction(self):
         self.AC = ~self.AC & ((1 << 12) - 1)  
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'SC', 'TM'], True)
 
     def CME_instruction(self):
         self.E = ~self.E & ((1 << 12) - 1)
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['E', 'SC', 'TM'], True)
 
@@ -356,7 +389,7 @@ class CPU:
         Lsb = self.AC & 1 
         self.AC = Hex(bits=3)._hex(int(self.AC, 16) >> 1 | (self.E << 11))
         self.E = Lsb
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'E', 'SC', 'TM'], True)
 
@@ -365,7 +398,7 @@ class CPU:
         # self.AC = self.hex_op(self.AC, '0', func= lambda x, y: ((self.AC << 1) & ((1 << 12) - 1)) | self.E)
         self.AC = Hex(bits=3)._hex(((int(self.AC, 16) << 1) & ((1 << 12) - 1)) | self.E)
         self.E = Msb
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'E', 'SC', 'TM'], True)
 
@@ -373,60 +406,60 @@ class CPU:
     def SZA_instruction(self):
         if self.AC == 0:
             self.PC = Hex(self.PC) + Hex('1') 
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'], True)
 
     def SZE_instruction(self):
         if self.E == 0:
             self.PC = Hex(self.PC) + Hex('1')     
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'], True)
 
     def ICA_instruction(self):
         self.AC = Hex(self.AC) + Hex('1')
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'SC', 'TM'], True)
 
     def ESW_instruction(self):
         self.SW = 1
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SW', 'SC', 'TM'], True)
 
     def DSW_instruction(self):
         self.SW = 0
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SW', 'SC', 'TM'], True)
 
     def ADD_instruction(self):
         self.A0 = 0
         self.A1 = 0
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['A0', 'A1', 'SC', 'TM'], True)
     
     def SUB_instruction(self):
         self.A0 = 1
         self.A1 = 0
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['A0', 'A1', 'TM', 'SC'], True) 
 
     def AND_instruction(self):
         self.A0 = 0
         self.A1 = 1
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['A0', 'A1', 'TM', 'SC'], True)
 
     def OR_instruction(self):
         self.A0 = 1
         self.A1 = 1
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['A0', 'A1', 'TM', 'SC'], True)
 
@@ -434,13 +467,13 @@ class CPU:
         self.S = 0
         self.NS = Hex(self.NS) + Hex('1')
         self.PC = Hex(self.PC) - Hex('1')
-        self.block(['S', 'NS'], True)
+        self.block(['S', 'NS'])
 
         if Hex(self.NS) == Hex(self.TP):
             self.GS = 0
         self.S = 0
         self.C = 1
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['S', 'GS', 'PC', 'C', 'SC', 'TM'], True)
 
@@ -460,7 +493,7 @@ class CPU:
         self.block(['TAR'])
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SC', 'TM'], True)
 
@@ -481,7 +514,7 @@ class CPU:
         self.PSR["A1"] = 0
         self.PSR["E"] = 0
         self.S = 0
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.C = 1
         self.block(['PSR', 'S', 'SC'], True)
 
@@ -490,7 +523,7 @@ class CPU:
         self.AR = '08'
         self.block(['AR'])
         self.TM = self.main_memory[int(self.AR, 16)]
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.block(['TM', 'SC'], True)
 
     def LDP_instruction(self):
@@ -509,7 +542,7 @@ class CPU:
         self.A0 = self.PSR["A0"]
         self.A1 = self.PSR["A1"]
         self.S = self.PSR["S"]
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'AC', 'A0', 'A1', 'S', 'E', 'SC', 'TM'], True)
 
@@ -520,21 +553,21 @@ class CPU:
         if self.main_memory[int(self.AR, 16)] == self.AC:
             self.PC = Hex(self.PC) + Hex('1') 
 
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['SC', 'TM'], True)
 
     def INP_instruction(self):
         self.AC = self.INPR
         self.FGI = 0
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'FGI', 'SC', 'TM'], True)
     
     def OUT_instruction(self):
         self.OUTR = self.AC
         self.FGO = 0
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['OUTR', 'FGO', 'SC', 'TM'],True)
 
@@ -542,7 +575,7 @@ class CPU:
         if self.FGI == 1:
             self.PC = Hex(self.PC) + Hex('1') 
         
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'], True)
 
@@ -550,26 +583,26 @@ class CPU:
         if self.FGO == 1:
             self.PC = Hex(self.PC) + Hex('1') 
         
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'SC', 'TM'], True)
 
     def EI_instruction(self):
         self.IEN = 1
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['IEN', 'SC', 'TM'], True)
 
     def DI_instruction(self):
         self.IEN = 0
-        self.SC = 0
+        self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['IEN', 'SC', 'TM'], True)
 
 
     def run_next(self):
         self.stepping = True
-        if self.TM == '00':
+        if self.TM == '00' and self.SW:
                 self.C = 1
                 self.contextSwitch()
         else:
@@ -583,6 +616,8 @@ class CPU:
                 self.instruction_map[opcode]()  
             else:
                 raise ValueError(f"Unknown opcode: {opcode}")
-        
+
+
+        print('Thread exited')
         self.stepping = False
       

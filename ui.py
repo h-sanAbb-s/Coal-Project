@@ -1,9 +1,10 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 from cpu import CPU, Hex
 import yaml
 import threading
 import time
+from functools import partial
 
 class UI:
     def __init__(self, cpu: CPU):
@@ -18,9 +19,11 @@ class UI:
         self.stop_requested = False
 
         # self.root.geometry("800x600")
-        self.registers_names = ["AR", "PC", "DR", "AC", "INPR", "IR", "TR", "TM", "PRC", "TAR", "TP", "NS", "OUT", "PSR"]
+        self.registers_names = ["AR", "PC", "DR", "AC", "INPR", "IR", "TR", "TM", "PRC", "TAR", "TP", "NS", "OUT", "SC", "PSR"]
         self.flip_flops_names = ["I", "E", "R", "C", "SW", "IEN", "FGI", "FGO", "S", "GS", "A0", "A1"]
+        self.can_edit = {'AR', 'PC', 'PRC', 'INPR', 'TAR', 'IEN', 'SW', 'FGI', 'FGO', 'S', 'GS'}
         self.prev_state = {}
+
         # self.prev_changed_values = self.registers_names + self.flip_flops_names
         self.prev_changed_values = [] 
         self.loading = False
@@ -50,6 +53,10 @@ class UI:
 
 
     def step_code(self):
+        if self.cpu.GS == 0: 
+            if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
+            return 
+
         if self.cpu.stepping == False: 
             self.step_running = threading.Thread(target = self.cpu.run_next,daemon=True)
             self.step_running.start()
@@ -60,23 +67,31 @@ class UI:
 
 
     def run_code(self):
-        def run_instructions():
-            while not self.stop_requested and self.cpu.GS != 0:
-                self.cpu.run_next() 
-
-            self.run_button_text.set("Run")
-            self.running_thread = None
-
-        if self.run_button_text.get() == "Run":
-            self.stop_requested = False
+        def run(): 
+            while True and self.cpu.running:
+                if self.cpu.stepping == False: 
+                    self.cpu.run_next()
+    
+                if self.cpu.GS == 0: 
+                    if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
+                    self.load_button.config(state='normal')
+                    self.step_button.config(state='normal')
+                    self.run_button.config(text='Run')
+                    self.cpu.running = False
+                    break
+        
+        if self.cpu.running == False: 
             self.cpu.running = True
-            self.run_button_text.set("Stop")
-            self.running_thread = threading.Thread(target=run_instructions, daemon=True)
-            self.running_thread.start()
-        else:
+            self.load_button.config(state='disabled')
+            self.step_button.config(state='disabled')
+            self.run_button.config(text='Stop')
+            threading.Thread(target=run, daemon=True).start()
+        else: 
+            self.load_button.config(state='normal')
+            self.step_button.config(state='normal')
+            self.run_button.config(text='Run')
             self.cpu.running = False
-            self.stop_requested = True
-            self.run_button_text.set("Run")
+
 
 
     def load_program(self): 
@@ -90,52 +105,85 @@ class UI:
             print("No file selected")
 
         self.cpu.stepping = False
+        self.cpu.running = False
+        self.loading = True
         time.sleep(0.1)
         self.cpu.__init__()
 
-        file = open(file_path, 'r') 
-        config = yaml.safe_load(file)
-        if 'REG' in config: 
-            for r, v in config['REG'].items(): 
-                setattr(self.cpu, r, Hex(str(v)).val)
+        self.cpu.changed_vars = []
+        try: 
+            file = open(file_path, 'r') 
+            config = yaml.safe_load(file)
+            if 'REG' in config: 
+                for r, v in config['REG'].items(): 
+                    if getattr(self.cpu, r, None) is None: raise ValueError(f"No such register as {r}")
 
-        if 'FF' in config: 
-            for f, v in config['FF'].items(): 
-                setattr(self.cpu, f, int(v))
-            
-        if 'M' in config: 
-            for l, v in config['M'].items(): 
-                l = int(str(l), 16)
-                if isinstance(v, list): 
-                    for i, _v in enumerate(v): 
-                        _v = str(_v)
-                        if len(_v) == 1: self.cpu.main_memory[i+l] = Hex(_v).val
-                        else: self.cpu.main_memory[i+l] = _v
-                else: 
-                    v = str(v)
-                    if len(v) == 1: self.cpu.main_memory[l] = Hex(v).val
-                    else: self.cpu.main_memory[l] = v 
-                    
+                    if r == 'PSR': 
+                        v = v.split('-')
+                        if len(v) != 7: raise ValueError("Invalid PSR register format")
+                        val = {'S': int(v[0])%2, 'A1': int(v[1])%2, 'A0': int(v[2])%2, 'E': int(v[3])%2, 
+                            'AC': Hex(str(v[4],3)).val, 'PC0': Hex(str(v[5])).val, 'PC': Hex(str(v[6])).val}
+                        setattr(self.cpu, r, val)
+                        self.prev_state[r] = val
+                    else: 
+                        setattr(self.cpu, r, Hex(str(v),self.cpu.bits[r]).val)
+                        self.prev_state[r] = Hex(str(v),self.cpu.bits[r]).val
+                    self.cpu.changed_vars.append(r)
+
+            if 'FF' in config: 
+                for f, v in config['FF'].items(): 
+                    if getattr(self.cpu, f, None) is None: raise ValueError(f"No such flip flop as {f}")
+                    setattr(self.cpu, f, int(v) % 2)
+                    self.cpu.changed_vars.append(f)
+
+                
+            if 'M' in config: 
+                for l, v in config['M'].items(): 
+                    l = int(str(l), 16)
+                    if l > 255 or l < 0: raise ValueError(f"Address out of bounds")
+                    if isinstance(v, list): 
+                        for i, _v in enumerate(v): 
+                            _v = str(_v)
+                            if len(_v): 
+                                if len(_v.split()) <= 3: self.cpu.main_memory[i+l] = _v
+                                else: raise ValueError(f"Invalid instruction/operand at location {Hex(str(l)).val}: {_v}")
+                    else: 
+                        v = str(v)
+                        if len(v): 
+                            if len(v.split()) <= 3: self.cpu.main_memory[l] = v
+                            else: raise ValueError(f"Invalid instruction/operand at location {Hex(str(l)).val}: {v}")
+                        
+            if 'M2' in config: 
+                for l, p in config['M2'].items(): 
+                    l == int(l)
+                    if l >= 8 or l < 0: raise ValueError(f"Invalid M2 location {l}")
+
+                    cols = ['S', 'A1', 'A0', 'E', 'AC', 'PC0', 'PC']
+                    if any(c not in p for c in cols): raise ValueError(f"Invalid M2 configuration at location {l}")
+                    p['PC'] = Hex(str(p['PC'])).val
+                    p['PC0'] = Hex(str(p['PC0'])).val
+                    p['AC'] = Hex(str(p['AC'])).val
+                    self.cpu.secondary_memory[l] = p 
+
+            if self.cpu.main_memory[8] == '': raise ValueError('Time value not specified at location 8')
+            self.cpu.TM = Hex(self.cpu.main_memory[8]).val
+            self.cpu.TP = Hex(str(len(config['M2'])),1).val if 'M2' in config else '0'
+            self.cpu.changed_vars.append('TM')
+            self.cpu.changed_vars.append('TP')
+        
+        except ValueError as v: 
+            messagebox.showerror(message=v)
+            self.cpu.__init__()
 
 
-
-
-        if 'M2' in config: 
-            for l, p in config['M2'].items(): 
-                l = int(str(l), 16)
-                p['PC'] = Hex(str(p['PC'])).val
-                p['PC0'] = Hex(str(p['PC0'])).val
-                p['AC'] = Hex(str(p['AC'])).val
-                self.cpu.secondary_memory[l] = p 
-                    
+        self.loading = False 
         self.update_ui()
-
+        self.update_selected_ui()
         # except: 
         #     print(f"Error in program file: f{file_path}")
         #     self.cpu.__init__()
         #     self.loading = False
         #     return
-
     
 
     def create_flip_flops_panel(self, frame):
@@ -150,11 +198,32 @@ class UI:
             lbl.grid(row = i, column= 0, pady = 1)
             entry = tk.Entry(flip_flops_frame, textvariable=var, width=10,justify='center')
             entry.grid(row = i, column = 1, pady = 1)
-            entry.bind("<KeyPress>", lambda e : "break")  
-            entry.bind("<KeyRelease>", lambda e: "break")  
-            entry.bind("<FocusOut>", lambda e: None)  
             self.flip_flops[ff] = [var, entry]
             self.prev_state[ff] = str(getattr(self.cpu, ff))
+
+            if ff in self.can_edit: 
+                def on_change(event, ff_name, var_instance, show_error = False):
+                    if self.cpu.stepping: 
+                        if show_error: messagebox.showerror("error", "can't change value during instruction execution")
+                        var_instance.set(getattr(self.cpu, ff_name))
+                        return "break"
+                    setattr(self.cpu, ff_name, int(var_instance.get()) % 2)
+                    self.cpu.changed_vars = [ff_name]
+                    self.update_selected_ui()
+
+                entry.config(bg='yellow')
+                
+
+
+                entry.bind("<FocusOut>", lambda event, f=ff, v=var: on_change(event, f, v, False))
+                entry.bind("<Return>", lambda event, f=ff, v=var: on_change(event, f, v, True))
+
+            else: 
+                entry.bind("<KeyPress>", lambda e : "break")  
+                entry.bind("<KeyRelease>", lambda e: "break")  
+                entry.bind("<FocusOut>", lambda e: None)  
+
+
 
 
 
@@ -165,7 +234,7 @@ class UI:
 
         self.registers = {}
         for i, reg in enumerate(self.registers_names):
-            width = 12 if reg != 'PSR' else 15
+            width = 12 if reg != 'PSR' else 16
             if reg == 'PSR':
                 psr_value = getattr(self.cpu, reg, {})
                 formatted_psr = '-'.join(str(value) for key, value in psr_value.items())
@@ -177,13 +246,34 @@ class UI:
             lbl.grid(row=i, column=0, pady=1)
             entry = tk.Entry(registers_frame, textvariable=var, width=width, justify='center')
             entry.grid(row=i, column=1, pady=1)
-            entry.bind("<KeyPress>", lambda e : "break")  
-            entry.bind("<KeyRelease>", lambda e: "break")  
-            entry.bind("<FocusOut>", lambda e: None)  
+
             self.registers[reg] = [var, entry]
             self.prev_state[reg] = str(getattr(self.cpu, reg))
+
             if reg == 'PSR': 
                 self.prev_state[reg] = '-'.join(str(value) for key, value in psr_value.items())
+
+            if reg in self.can_edit: 
+                def on_change(event, reg_name, var_instance, show_error = False):
+                    if self.cpu.stepping: 
+                        if show_error: messagebox.showerror("error", "can't change value during instruction execution")
+                        var_instance.set(getattr(self.cpu, reg_name))
+                        return "break"
+                    setattr(self.cpu, reg_name, Hex(var_instance.get(), self.cpu.bits[reg_name]).val)
+                    self.cpu.changed_vars = [reg_name]
+                    self.update_selected_ui()
+
+
+                entry.config(bg='yellow')
+
+                entry.bind("<FocusOut>", lambda event, r=reg, v=var: on_change(event, r, v, False))
+                entry.bind("<Return>", lambda event, r=reg, v=var: on_change(event, r, v, True))
+
+            else: 
+                entry.bind("<KeyPress>", lambda e : "break")  
+                entry.bind("<KeyRelease>", lambda e: "break")  
+                entry.bind("<FocusOut>", lambda e: None)  
+
 
 
     def create_main_memory_table(self, frame):
@@ -209,6 +299,7 @@ class UI:
         self.main_memory_table.selection_set(row_id)  
         self.main_memory_table.focus(row_id)
         self.main_memory_table.see(row_id)
+        self.main_memory_table.bind("<Double-1>", self.on_memory_edit)
 
     def create_secondary_memory_table(self, frame):
         # Create a frame for secondary memory
@@ -216,22 +307,25 @@ class UI:
         secondary_memory_frame.pack(side=tk.TOP)
 
         self.secondary_memory_table = ttk.Treeview(secondary_memory_frame, columns=("S", "A1", "A0", "E", "AC", "PC0", "PC"), show="headings", height=8)
-        for col in ["S", "A1", "A0", "E", "AC", "PC0", "PC"]:
-            self.secondary_memory_table.heading(col, text=col)
-            self.secondary_memory_table.column(col, width=50, anchor=tk.CENTER)
+        for i, col in enumerate(["S", "A1", "A0", "E", "AC", "PC0", "PC"]):
+            id = f"#{i+1}"
+            self.secondary_memory_table.heading(id, text=col)
+            self.secondary_memory_table.column(id, width=50, anchor=tk.CENTER)
         self.secondary_memory_table.pack(fill=tk.BOTH, expand=True)
 
         # Populate secondary memory table
         for row in self.cpu.secondary_memory:
             self.secondary_memory_table.insert("", "end", values=list(row.values()))
         
-        pid = self.cpu.main_memory[int(getattr(self.cpu, 'PRC'))]
-        if pid != '': 
-            pid = int(pid)
-            row_id = self.secondary_memory_table.get_children()[pid] 
-            self.secondary_memory_table.selection_set(row_id)  
-            self.secondary_memory_table.focus(row_id)
-            self.secondary_memory_table.see(row_id)
+        # pid = self.cpu.main_memory[int(getattr(self.cpu, 'PRC'))]
+        # if pid != '': 
+        #     pid = int(pid)
+        pid = int(getattr(self.cpu, 'TAR'))
+        row_id = self.secondary_memory_table.get_children()[pid] 
+        self.secondary_memory_table.selection_set(row_id)  
+        self.secondary_memory_table.focus(row_id)
+        self.secondary_memory_table.see(row_id)
+        self.secondary_memory_table.bind("<Double-1>", self.on_secondary_memory_edit)
 
     def create_buttons(self,frame): 
         # Create a frame for the buttons
@@ -243,10 +337,12 @@ class UI:
         button_frame.columnconfigure(1, weight=1)
         button_frame.columnconfigure(2, weight=1)
         button_frame.columnconfigure(3, weight=1)
+
         # Create the buttons
-        load_button = tk.Button(button_frame, text="Load", command=self.load_program)
-        step_button = tk.Button(button_frame, text="Step", command=self.step_code)
-        run_button = tk.Button(button_frame, text="Run", command=self.run_code)
+        self.load_button = tk.Button(button_frame, text="Load", command=self.load_program)
+        self.step_button = tk.Button(button_frame, text="Step", command=self.step_code)
+        self.run_button = tk.Button(button_frame, text="Run" if not self.cpu.running else "Stop", command=self.run_code)
+
 
         selected_option = tk.StringVar()
         selected_option.set(str(self.cpu.clk)+"hz")
@@ -255,15 +351,17 @@ class UI:
         dropdown.config(bg='white')
         
         # Position the buttons in the gridk
-        load_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        step_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        run_button.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
-
+        self.load_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.step_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.run_button.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
         dropdown.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
 
-        def clk_change(*args): self.cpu.clk = float(selected_option.get())
+        def clk_change(*args): self.cpu.clk = float(selected_option.get()[:-2])
         selected_option.trace_add('write', clk_change)
     
+    def popup(self, msg): 
+        tk.messagebox
+
     def ui_loop(self): 
         if cpu.update_ui: 
             start = time.perf_counter()
@@ -272,8 +370,13 @@ class UI:
             print(time.perf_counter() - start)
             cpu.update_ui = False
         
-        self.root.after(50, self.ui_loop)
+        # if self.cpu.stepping == False and self.cpu.running == False: 
+
+        
+        self.root.after(1, self.ui_loop)
     
+    
+
     def update_selected_ui(self): 
         for r in self.prev_changed_values: 
             entry = None
@@ -283,7 +386,8 @@ class UI:
                 (_, entry) = self.flip_flops[r]
             
             if entry is not None : 
-                entry.config(bg='white', fg='black')
+                if r in self.can_edit: entry.config(bg='yellow', fg='black')
+                else: entry.config(bg='white', fg='black')
 
         mem_pointer = 'AR'
         for r in self.cpu.changed_vars: 
@@ -298,8 +402,12 @@ class UI:
 
             # if r == 'M': mem_pointer = 'AR' 
             if entry is not None : 
+                # breakpoint()
                 entry.config(bg='blue', fg='white')
-                var.set(getattr(self.cpu, r))
+                if r == 'PSR': 
+                    val = '-'.join([v for v in self.cpu.PSR.items()])
+                else: val = getattr(self.cpu, r)
+                var.set(val)
         
         self.prev_changed_values = self.cpu.changed_vars.copy()
 
@@ -312,21 +420,20 @@ class UI:
         row_id = self.main_memory_table.get_children()[int(address,16)] 
         self.main_memory_table.item(row_id, values=(address, self.cpu.main_memory[int(address, 16)],))
 
-        pid = self.cpu.main_memory[int(getattr(self.cpu, 'PRC'))]
-        if pid != '': 
-            pid = int(pid)
-            row_id = self.secondary_memory_table.get_children()[pid] 
-            self.secondary_memory_table.selection_set(row_id)  
-            self.secondary_memory_table.focus(row_id)
-            self.secondary_memory_table.see(row_id)
+        pid = int(getattr(self.cpu, 'TAR'))
+        # if pid != '': 
+        #     pid = int(pid)
+        row_id = self.secondary_memory_table.get_children()[pid] 
+        self.secondary_memory_table.selection_set(row_id)  
+        self.secondary_memory_table.focus(row_id)
+        self.secondary_memory_table.see(row_id)
 
-            row = self.cpu.secondary_memory[pid]
-            table_id = self.secondary_memory_table.get_children()[pid]
-            values = []
-            for col in ["S", "A1", "A0", "E", "AC", "PC0", "PC"]:
-                values.append(str(row[col]))
-            self.secondary_memory_table.item(table_id, values=values)
-
+        row = self.cpu.secondary_memory[pid]
+        table_id = self.secondary_memory_table.get_children()[pid]
+        values = []
+        for col in ["S", "A1", "A0", "E", "AC", "PC0", "PC"]:
+            values.append(str(row[col]))
+        self.secondary_memory_table.item(table_id, values=values)
 
 
     def clear_selected(self):
@@ -349,7 +456,8 @@ class UI:
                 self.prev_state[ff] = val
                 self.prev_changed_values.append(ff)
             else: 
-                entry.config(bg='white', fg='black')
+                if ff in self.can_edit: entry.config(bg='yellow', fg='black')
+                else: entry.config(bg='white', fg='black')
             # entry.config(state = "normal")
             var.set(val)
             # entry.config(state = "disabled")
@@ -368,7 +476,8 @@ class UI:
                 self.prev_state[reg] = val
                 self.prev_changed_values.append(reg)
             else: 
-                entry.config(bg='white', fg='black')
+                if reg in self.can_edit: entry.config(bg='yellow', fg='black')
+                else: entry.config(bg='white', fg='black')
             var.set(val)
 
         # Update main memory
@@ -388,14 +497,14 @@ class UI:
                 self.main_memory_table.item(child, values=(f"{address:02x}".upper(), value,))
 
         # Update secondary memory
-        pid = self.cpu.main_memory[int(getattr(self.cpu, 'PRC'))]
-        if pid != '': 
-            pid = int(pid)
-            row_id = self.secondary_memory_table.get_children()[pid] 
-            if int(getattr(self.cpu, 'GS')) == 1: 
-                self.secondary_memory_table.selection_set(row_id)  
-                self.secondary_memory_table.focus(row_id)
-                self.secondary_memory_table.see(row_id)
+        pid = int(getattr(self.cpu, 'TAR'))
+        # if pid != '': 
+        #     pid = int(pid)
+        row_id = self.secondary_memory_table.get_children()[pid] 
+            # if int(getattr(self.cpu, 'GS')) == 1: 
+        self.secondary_memory_table.selection_set(row_id)  
+        self.secondary_memory_table.focus(row_id)
+        self.secondary_memory_table.see(row_id)
 
         for i, (child, row) in enumerate(zip(self.secondary_memory_table.get_children(), self.cpu.secondary_memory)):
             values = []
@@ -403,6 +512,75 @@ class UI:
                 values.append(str(row[col]))
             self.secondary_memory_table.item(child, values=values)
 
+    def on_memory_edit(self, event):
+        if self.cpu.running or self.cpu.stepping: return
+
+        item_id = self.main_memory_table.identify_row(event.y)
+        column = self.main_memory_table.identify_column(event.x)
+
+        if column != "#2" or not item_id: return
+
+        current_value = self.main_memory_table.item(item_id, "values")[1]
+        
+        entry = tk.Entry(self.root)
+        entry.insert(0, current_value)
+        entry.place(x=event.x_root - self.root.winfo_rootx() - 50, y=event.y_root - self.root.winfo_rooty())
+        entry.focus()
+
+        def save_value():
+            new_value = entry.get()
+            
+            self.main_memory_table.item(item_id, values=(self.main_memory_table.item(item_id, "values")[0], new_value))
+            
+            address = int(self.main_memory_table.item(item_id, "values")[0], 16)
+            self.cpu.main_memory[address] = new_value
+
+            entry.destroy()
+
+        entry.bind("<Return>", lambda e: save_value())
+        entry.bind("<FocusOut>", lambda e: save_value())
+
+    def on_secondary_memory_edit(self, event):
+        if self.cpu.running or self.cpu.stepping: return
+
+        item_id = self.secondary_memory_table.identify_row(event.y)
+        column_id = int(self.secondary_memory_table.identify_column(event.x)[1:]) - 1
+        
+
+        columns = ["S", "A1", "A0", "E", "AC", "PC0", "PC"]
+        current_value = self.secondary_memory_table.item(item_id, "values")[column_id]
+
+        entry = tk.Entry(self.root)
+        entry.insert(0, current_value)
+        entry.place(x=event.x_root - self.root.winfo_rootx() - 50, y=event.y_root - self.root.winfo_rooty())
+        entry.focus()
+
+        def save_value():
+            new_value = entry.get()
+            if new_value == '': 
+                entry.destroy()
+                return "break"
+            
+            if column_id in range(4): 
+                new_value = str(int(new_value) % 2)
+            elif column_id == 4: 
+                new_value = Hex(str(new_value), 3).val
+            else: 
+                new_value = Hex(str(new_value)).val
+
+            values =  list(self.secondary_memory_table.item(item_id, "values"))
+            values[column_id] = new_value
+            self.secondary_memory_table.item(item_id, values=values)
+            
+            address = (int(item_id[1:]) - 1) %8 
+            self.cpu.secondary_memory[address][columns[column_id]] = new_value
+
+            entry.destroy()
+
+        # entry.bind("<Return>", lambda e: "break")
+        # entry.bind("<FocusOut>", lambda e: "break")
+        entry.bind("<Return>", lambda e: save_value())
+        entry.bind("<FocusOut>", lambda e: save_value())
 
 
 cpu = CPU()
