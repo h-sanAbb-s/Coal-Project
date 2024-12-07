@@ -1,6 +1,7 @@
 from time import sleep
 import inspect
 import threading
+from tkinter import messagebox
 
 
 class Hex(): 
@@ -54,7 +55,7 @@ class CPU:
         self.NS = Hex(bits=1).val     # Number of Stops (3 bits)
         self.OUT = Hex(bits=1).val    # Output Register (8 bits)
         self.SC = Hex(bits=1).val
-        self.PSR = {'S': 0, 'A1' : 0, 'A0' : 0, 'E': 0, 'AC': Hex('0',3).val, 'PC0  ': Hex('0').val, 'PC':Hex('0').val}
+        self.PSR = {'S': 0, 'A1' : 0, 'A0' : 0, 'E': 0, 'AC': Hex('0',3).val, 'PC0': Hex('0').val, 'PC':Hex('0').val}
 
         # Flip-Flops
         self.I = 0      # Interrupt Flip-Flop
@@ -185,26 +186,29 @@ class CPU:
             self.SC = Hex(self.SC,1) + Hex('1')
         else: 
             self.changed_vars = changed_var
+            if Hex(self.TM) == Hex('0'): 
+                self.C = 1
+                self.changed_vars += ['C']
         
         self.update_ui = True
 
-        if self.running:
-            sleep(1/self.clk) 
-            while self.update_ui: pass
+        # if self.running:
+        sleep(1/self.clk) 
+        while self.update_ui: pass
 
-        if last == True: 
-            self.stepping = False
-            return
+        # if last == True: 
+        #     self.stepping = False
+        #     return
 
-        with self.lock: 
-            self.execute = False 
+        # with self.lock: 
+        #     self.execute = False 
 
 
-        if self.stepping and not self.running: 
-            while self.execute == False and self.stepping and self.running == False: pass
-            if self.running: 
-                sleep(1/self.clk) 
-                while self.update_ui: pass
+        # if self.stepping and not self.running: 
+        #     while self.execute == False and self.stepping and self.running == False: pass
+        #     if self.running: 
+        #         sleep(1/self.clk) 
+        #         while self.update_ui: pass
         
 
         # print(f"comming out of block with parent function {inspect.stack()[1].function}")
@@ -218,19 +222,21 @@ class CPU:
         self.PSR["A1"] = self.A1
         self.PSR["S"] = self.S
         self.AR = self.PRC
-        self.block(['AR', 'PRC'])
+        temp = int(self.main_memory[int(self.AR, 16)], 16)
+        self.PSR["PC0"] = self.secondary_memory[temp]['PC0']
+        self.block(['AR', 'PSR'])
 
         self.TAR = self.main_memory[int(self.AR, 16)]
         self.block(['TAR'])
 
         self.AR = '08'
-        self.PRC = Hex(self.PRC) + Hex('1')
+        self.PRC = Hex(self.PRC, 1) + Hex('1')
         self.block(['AR', 'PRC'])
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR
         self.TM = self.main_memory[int(self.AR, 16)]
         if (self.PRC == self.TP):
-            self.PRC = '000'
+            self.PRC = Hex('0', 1).val
         self.block(['PRC', 'TM'])        
 
         self.AR = self.PRC
@@ -251,8 +257,8 @@ class CPU:
         self.C = 0
         if (self.S == 0):
             self.C = 1
-        self.SC = Hex('0', 1)
-        self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'C'], True)
+        self.SC = Hex('0', 1).val
+        self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'C', 'SC'], True)
 
     def CAL_instruction(self):
         self.DR = Hex(self.main_memory[int(self.AR, 16)],3).val
@@ -271,7 +277,7 @@ class CPU:
 
         self.TM = Hex(self.TM) - Hex('1') 
         self.SC = Hex('0',1).val
-        self.block(['AC', 'TM'], True)
+        self.block(['AC', 'TM', 'SC'], True)
 
     def LDA_instruction(self):
         self.DR = Hex(self.main_memory[int(self.AR, 16)], 3).val
@@ -615,7 +621,7 @@ class CPU:
             if opcode in self.instruction_map:
                 self.instruction_map[opcode]()  
             else:
-                raise ValueError(f"Unknown opcode: {opcode}")
+                messagebox.showerror(message=f'unkown instruction {opcode}')
 
 
         print('Thread exited')

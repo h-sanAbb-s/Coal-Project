@@ -21,7 +21,7 @@ class UI:
         # self.root.geometry("800x600")
         self.registers_names = ["AR", "PC", "DR", "AC", "INPR", "IR", "TR", "TM", "PRC", "TAR", "TP", "NS", "OUT", "SC", "PSR"]
         self.flip_flops_names = ["I", "E", "R", "C", "SW", "IEN", "FGI", "FGO", "S", "GS", "A0", "A1"]
-        self.can_edit = {'AR', 'PC', 'PRC', 'INPR', 'TAR', 'IEN', 'SW', 'FGI', 'FGO', 'S', 'GS'}
+        self.can_edit = {'AR', 'PC', 'PRC', 'INPR', 'TP', 'TAR', 'IEN', 'SW', 'FGI', 'FGO', 'S', 'GS'}
         self.prev_state = {}
 
         # self.prev_changed_values = self.registers_names + self.flip_flops_names
@@ -52,28 +52,38 @@ class UI:
         self.root.mainloop()
 
 
-    def step_code(self):
+    def step_code(self, buttons = True):
+        def update_buttons(): 
+            self.load_button.config(state='disabled')
+            self.run_button.config(state='disabled')
+            self.step_button.config(state='disabled')
+            while self.cpu.stepping and not self.load_button: pass
+            self.load_button.config(state='normal')
+            self.run_button.config(state='normal')
+            self.step_button.config(state='normal')
+
+
         if self.cpu.GS == 0: 
             if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
             return 
 
         if self.cpu.stepping == False: 
-            self.step_running = threading.Thread(target = self.cpu.run_next,daemon=True)
-            self.step_running.start()
+            try: 
+                self.step_running = threading.Thread(target = self.cpu.run_next,daemon=True).start()
+            except ValueError as v: 
+                messagebox.showerror(message=v)
+            if buttons: threading.Thread(target=update_buttons, daemon=True).start()
 
-        else: 
-            with self.cpu.lock: 
-                self.cpu.execute = True
 
 
     def run_code(self):
         def run(): 
             while True and self.cpu.running:
                 if self.cpu.stepping == False: 
-                    self.cpu.run_next()
+                    self.step_code(False)
     
                 if self.cpu.GS == 0: 
-                    if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
+                    # if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
                     self.load_button.config(state='normal')
                     self.step_button.config(state='normal')
                     self.run_button.config(text='Run')
@@ -162,7 +172,7 @@ class UI:
                     if any(c not in p for c in cols): raise ValueError(f"Invalid M2 configuration at location {l}")
                     p['PC'] = Hex(str(p['PC'])).val
                     p['PC0'] = Hex(str(p['PC0'])).val
-                    p['AC'] = Hex(str(p['AC'])).val
+                    p['AC'] = Hex(str(p['AC']),3).val
                     self.cpu.secondary_memory[l] = p 
 
             if self.cpu.main_memory[8] == '': raise ValueError('Time value not specified at location 8')
@@ -346,7 +356,7 @@ class UI:
 
         selected_option = tk.StringVar()
         selected_option.set(str(self.cpu.clk)+"hz")
-        options = ["0.5hz", "1hz", "50hz"]
+        options = ["0.5hz", "1hz", "3hz"]
         dropdown = tk.OptionMenu(button_frame, selected_option, *options)
         dropdown.config(bg='white')
         
@@ -372,9 +382,7 @@ class UI:
         
         # if self.cpu.stepping == False and self.cpu.running == False: 
 
-        
         self.root.after(1, self.ui_loop)
-    
     
 
     def update_selected_ui(self): 
@@ -405,7 +413,8 @@ class UI:
                 # breakpoint()
                 entry.config(bg='blue', fg='white')
                 if r == 'PSR': 
-                    val = '-'.join([v for v in self.cpu.PSR.items()])
+                    cols = ['S', 'A1', 'A0', 'E', 'AC', 'PC0', 'PC']
+                    val = '-'.join([str(self.cpu.PSR[c]) for c in cols])
                 else: val = getattr(self.cpu, r)
                 var.set(val)
         

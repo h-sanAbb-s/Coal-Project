@@ -4,6 +4,7 @@ REG:
 FF:
     GS: 1    
     S: 1
+    SW: 1
 
 M: 
     00:  #required since the context switching will placed in the following order
@@ -16,7 +17,7 @@ M:
         - 6
         - 7
 
-    08: 3 #required since it indicates the time after which context switching will occurr
+    08: 1 #required since it indicates the time after which context switching will occurr
     0A:
         - 12
         - 12 
@@ -26,11 +27,29 @@ M:
         - CAL 0B
         - STA 0C
         - HLT 
+    
+    1A: 
+        - 3AB
+        - 3CA
+        - 0
+        - LDA 1A
+        - SUB
+        - CAL 1B
+        - STA 1C
+        - HLT 
 
 M2: 
     0: 
-        PC: 10
-        PC0: 10
+        PC: 0D
+        PC0: 0A
+        AC: 0
+        S: 1
+        A0: 0
+        A1: 0
+        E: 0
+    1: 
+        PC: 1D
+        PC0: 1D
         AC: 0
         S: 1
         A0: 0
