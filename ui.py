@@ -19,9 +19,9 @@ class UI:
         self.stop_requested = False
 
         # self.root.geometry("800x600")
-        self.registers_names = ["AR", "PC", "DR", "AC", "INPR", "IR", "TR", "TM", "PRC", "TAR", "TP", "NS", "OUT", "SC", "PSR"]
+        self.registers_names = ["AR", "PC", "DR", "AC", "INPR", "IR", "TR", "TM", "PRC", "TAR", "TP", "NS", "OUTR", "SC", "PSR"]
         self.flip_flops_names = ["I", "E", "R", "C", "SW", "IEN", "FGI", "FGO", "S", "GS", "A0", "A1"]
-        self.can_edit = {'AR', 'PC', 'PRC', 'INPR', 'TP', 'TAR', 'IEN', 'SW', 'FGI', 'FGO', 'S', 'GS'}
+        self.can_edit = {'AR', 'PC', 'PRC', 'INPR', 'NS', 'TAR', 'IEN', 'SW', 'FGI', 'FGO', 'S', 'GS'}
         self.prev_state = {}
 
         # self.prev_changed_values = self.registers_names + self.flip_flops_names
@@ -115,10 +115,11 @@ class UI:
         exp.withdraw()  
         file_path = filedialog.askopenfilename(title="Select a file", filetypes=(("Yaml Files", "*.yaml"),))
 
-        if file_path:
-            print(f"{file_path} is loaded")
-        else:
-            print("No file selected")
+        if file_path is None or file_path == '': 
+            print('Cannot load file')
+            return 
+
+        print(f"{file_path} is loaded")
 
         self.cpu.stepping = False
         self.cpu.running = False

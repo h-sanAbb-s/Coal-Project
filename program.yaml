@@ -5,6 +5,8 @@ FF:
     GS: 1    
     S: 1
     SW: 0
+    #PSR example
+    #PSR: 0-0-0-0-0AC-1D-1D
 
 M: 
     00:  #required since the context switching will placed in the following order
@@ -18,16 +20,21 @@ M:
         - 7
 
     08: 3 #required since it indicates the time after which context switching will occurr
+    09: 14 #required for io interrupt handling
     0A:
         - 12
         - 12 
         - 0
         - LDA 0A
-        - SWT 1
         - ADD
         - CAL 0B
         - STA 0C
         - HLT 
+
+    14: 
+        - INP
+        - OUT
+        - LDP 
     
     1A: 
         - 3AB
@@ -37,6 +44,7 @@ M:
         - SUB
         - CAL 1B
         - STA 1C
+        - LDP
         - RST 
 
 M2: 
@@ -58,9 +66,4 @@ M2:
         E: 0
         
 
-
-
-
-
-    
 

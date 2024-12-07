@@ -53,7 +53,7 @@ class CPU:
         self.TAR = Hex(bits=1).val    # Table Address Register (3 bits)
         self.TP = Hex(bits=1).val     # Total Processes (3 bits)
         self.NS = Hex(bits=1).val     # Number of Stops (3 bits)
-        self.OUT = Hex(bits=1).val    # Output Register (8 bits)
+        self.OUTR = Hex(bits=1).val    # Output Register (8 bits)
         self.SC = Hex(bits=1).val
         self.PSR = {'S': 0, 'A1' : 0, 'A0' : 0, 'E': 0, 'AC': Hex('0',3).val, 'PC0': Hex('0').val, 'PC':Hex('0').val}
 
@@ -188,6 +188,7 @@ class CPU:
                 self.C = self.SW
                 self.stepping = False
             
+            self.R = int(self.IEN and (self.FGI or self.FGO))
             self.memory_ptr = 'PC'
         else: 
             self.changed_vars = changed_var + ['SC']
@@ -215,6 +216,32 @@ class CPU:
         
         # print(f"comming out of block with parent function {inspect.stack()[1].function}")
 
+    def ioInterrupt(self): 
+        self.PSR["S"] = self.S
+        self.PSR["A1"] = self.A1
+        self.PSR["A0"] = self.A0
+        self.PSR["E"] = self.E
+        self.PSR["PC"] = self.PC
+        self.PSR["AC"] = self.AC
+        self.AR = Hex(self.PRC).val
+        temp = int(self.main_memory[int(self.AR, 16)], 16)
+        self.PSR["PC0"] = self.secondary_memory[temp]['PC0']
+        self.block(['AR', 'PSR'])
+
+        self.TAR = self.main_memory[int(self.AR, 16)]
+        if int(self.TAR, 16) >= 8: 
+            raise ValueError(f'Invalid PID: {self.TAR}')
+        self.TAR = Hex(self.TAR, 1).val
+        self.block(['TAR'])
+
+        self.AR = '09'
+        self.block(['AR'])
+
+        self.secondary_memory[int(self.TAR, 16)] = self.PSR.copy()
+        self.PC = self.main_memory[int(self.AR, 16)]
+        self.IEN, self.SW, self.R, self.SC = 0,0,0,Hex('0',1).val
+        self.FGI, self.FGO = 0,0
+        self.block(['PC', 'IEN', 'SW', 'R', 'SC', 'FGI', 'FGO'], True)
 
     def contextSwitch(self):
         self.PSR["S"] = self.S
@@ -231,6 +258,9 @@ class CPU:
         self.block(['AR', 'PSR'])
 
         self.TAR = self.main_memory[int(self.AR, 16)]
+        if int(self.TAR, 16) >= 8: 
+            raise ValueError(f'Invalid PID: {self.TAR}')
+        self.TAR = Hex(self.TAR, 1).val 
         self.block(['TAR'])
 
         self.AR = '08'
@@ -331,6 +361,7 @@ class CPU:
         self.PSR["S"] = self.S
         temp = int(self.main_memory[int(self.PRC, 16)], 16)
         self.PSR["PC0"] = self.secondary_memory[temp]['PC0']
+        
         self.TR = Hex(self.AR,3).val 
         self.block(['PSR', 'TR'])
 
@@ -338,6 +369,10 @@ class CPU:
         self.block(['AR'])
 
         self.TAR = self.main_memory[int(self.AR, 16)]
+        if int(self.TAR, 16) >= 8: 
+            raise ValueError(f'Invalid PID: {self.TAR}')
+        self.TAR = Hex(self.TAR, 1).val
+
         self.block(['TAR'])
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR.copy()
@@ -362,6 +397,7 @@ class CPU:
         self.TM = self.main_memory[int(self.AR, 16)]
         if self.PSR["S"] == 0:
             self.NS = Hex(self.NS) - Hex('1')
+        self.TAR = Hex(self.TAR, 1).val
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['PC', 'AC', 'E', 'A0', 'A1', 'S', 'TM', 'NS', 'SC', 'TM'], True)
@@ -369,6 +405,9 @@ class CPU:
 
     def AWT_instruction(self):
         self.TAR = self.main_memory[int(self.AR, 16)]
+        if int(self.TAR, 16) >= 8: 
+            raise ValueError(f"Invalid PID: {self.TAR}")
+        self.TAR = Hex(self.TAR,1).val
         self.block(['TAR'])
 
         self.PSR = self.secondary_memory[int(self.TAR, 16)].copy()
@@ -501,8 +540,12 @@ class CPU:
         self.PSR["A0"] = self.A0
         self.PSR["A1"] = self.A1
         self.PSR["S"] = self.S
-        self.AR = self.TP
-        self.TP = Hex(self.TP) + Hex('1')
+        temp = int(self.main_memory[int(self.PRC, 16)], 16)
+        self.PSR["PC0"] = self.secondary_memory[temp]['PC0']
+        if Hex(self.TP) == Hex('7'): 
+            raise ValueError('Cannot create more than 8 processes')
+        self.AR = Hex(self.TP).val
+        self.TP = Hex(self.TP,1) + Hex('1')
         self.block(['PSR', 'AR', 'TP'])
 
 
@@ -546,7 +589,7 @@ class CPU:
     def UTM_instruction(self):
         self.AR = '08'
         self.block(['AR'])
-        self.TM = self.main_memory[int(self.AR, 16)]
+        self.TM = Hex(self.main_memory[int(self.AR, 16)], 2).val
         self.SC = Hex('0',1).val
         self.block(['TM', 'SC'], True)
 
@@ -582,14 +625,14 @@ class CPU:
         self.block(['SC', 'TM'], True)
 
     def INP_instruction(self):
-        self.AC = self.INPR
+        self.AC = Hex(self.INPR,3).val
         self.FGI = 0
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
         self.block(['AC', 'FGI', 'SC', 'TM'], True)
     
     def OUT_instruction(self):
-        self.OUTR = self.AC
+        self.OUTR = Hex(self.AC,1).val
         self.FGO = 0
         self.SC = Hex('0',1).val
         self.TM = Hex(self.TM) - Hex('1') 
@@ -625,21 +668,33 @@ class CPU:
 
 
     def run_next(self):
+        if not self.GS: return
         self.stepping = True
-        if (self.C and self.SW) or not self.S:
+        try: 
+            if (self.C and self.SW) or not self.S:
                 self.contextSwitch()
-        else:
-            self.fetch()
-            opcode, address, I_address = self.decode()
-            if I_address == True:
-                self.AR = self.main_memory[address]
-                self.block(['AR'])
             
-            if opcode in self.instruction_map:
-                self.instruction_map[opcode]()  
-            else:
-                messagebox.showerror(message=f'unkown instruction {opcode}')
+            elif self.R or (self.IEN and (self.FGI or self.FGO)): 
+                if not self.R: 
+                    self.R = 1
+                    self.block(['R']) 
+                self.ioInterrupt()
 
+
+            else:
+                self.fetch()
+                opcode, address, I_address = self.decode()
+                if I_address == True:
+                    self.AR = self.main_memory[address]
+                    self.block(['AR'])
+                
+                if opcode in self.instruction_map:
+                    self.instruction_map[opcode]()  
+                else:
+                    raise ValueError(f'unknown instructions {opcode}')
+
+        except ValueError as v: 
+            messagebox.showerror(message=v)
         # print(self.secondary_memory)
 
         print('Thread exited')
