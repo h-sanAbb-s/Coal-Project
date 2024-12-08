@@ -445,7 +445,7 @@ class UI:
         row_id = self.main_memory_table.get_children()[int(getattr(self.cpu, 'AR'),16)] 
         address = getattr(self.cpu, 'AR')
         row_id = self.main_memory_table.get_children()[int(address,16)] 
-        self.main_memory_table.item(row_id, values=(address, self.cpu.main_memory[int(address, 16)],))
+        self.main_memory_table.item(row_id, values=(Hex(address).val, self.cpu.main_memory[int(address, 16)],))
 
         pid = int(getattr(self.cpu, 'TAR'))
         # if pid != '': 
