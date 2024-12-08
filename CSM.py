@@ -4,7 +4,7 @@ from cpu import CPU, Hex
 import yaml
 import threading
 import time
-from functools import partial
+import sys
 
 class UI:
     def __init__(self, cpu: CPU):
@@ -46,9 +46,11 @@ class UI:
         self.create_secondary_memory_table(smf)
         self.create_buttons(smf)
 
+        def on_closing(): self.root.destroy(); sys.exit()
         # Start the main loop
         self.ui_loop()
         self.update_ui()
+        self.root.protocol("WM_DELETE_WINDOW", on_closing)
         self.root.mainloop()
 
 
@@ -83,30 +85,33 @@ class UI:
 
     def run_code(self):
         def run(): 
-            while True and self.cpu.running:
+            while self.cpu.running:
                 if self.cpu.stepping == False: 
                     self.step_code(False)
 
     
                 if self.cpu.GS == 0: 
-                    # if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
+                    if not self.loading: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
                     self.load_button.config(state='normal')
                     self.step_button.config(state='normal')
                     self.run_button.config(text='Run')
                     self.cpu.running = False
                     break
+                time.sleep(0.1)
         
+    
         if self.cpu.running == False: 
             self.cpu.running = True
             self.load_button.config(state='disabled')
             self.step_button.config(state='disabled')
             self.run_button.config(text='Stop')
-            threading.Thread(target=run, daemon=True).start()
+            threading.Thread(target=self.cpu.run_code, daemon=True).start()
         else: 
             self.load_button.config(state='normal')
             self.step_button.config(state='normal')
             self.run_button.config(text='Run')
             self.cpu.running = False
+            if not self.cpu.GS: messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
 
 
 
@@ -366,12 +371,12 @@ class UI:
         # Create the buttons
         self.load_button = tk.Button(button_frame, text="Load", command=self.load_program)
         self.step_button = tk.Button(button_frame, text="Step", command=self.step_code)
-        self.run_button = tk.Button(button_frame, text="Run" if not self.cpu.running else "Stop", command=self.run_code)
+        self.run_button = tk.Button(button_frame, text="Run", command=self.run_code)
 
 
         selected_option = tk.StringVar()
         selected_option.set(str(self.cpu.clk)+"hz")
-        options = ["0.2hz", "0.5hz", "1hz", "5hz"]
+        options = ["0.2hz", "0.5hz", "1hz", "20hz"]
         dropdown = tk.OptionMenu(button_frame, selected_option, *options)
         dropdown.config(bg='white')
         
@@ -384,20 +389,18 @@ class UI:
         def clk_change(*args): self.cpu.clk = float(selected_option.get()[:-2])
         selected_option.trace_add('write', clk_change)
     
-    def popup(self, msg): 
-        tk.messagebox
 
     def ui_loop(self): 
         if cpu.update_ui: 
-            start = time.perf_counter()
+            # start = time.perf_counter()
             # self.update_ui(selected=False)
             self.update_selected_ui()
-            print(time.perf_counter() - start)
+            # print(time.perf_counter() - start)
             cpu.update_ui = False
         
         # if self.cpu.stepping == False and self.cpu.running == False: 
 
-        self.root.after(1, self.ui_loop)
+        self.root.after(5, self.ui_loop)
     
 
     def update_selected_ui(self): 

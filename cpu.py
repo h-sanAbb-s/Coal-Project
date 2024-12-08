@@ -269,7 +269,7 @@ class CPU:
 
         self.secondary_memory[int(self.TAR, 16)] = self.PSR.copy()
         self.TM = Hex(self.main_memory[int(self.AR, 16)]).val
-        if (self.PRC == self.TP):
+        if (Hex(self.PRC,1) == Hex(self.TP)):
             self.PRC = Hex('0', 1).val
         self.block(['PRC', 'TM'])        
 
@@ -669,6 +669,8 @@ class CPU:
 
     def run_next(self):
         if not self.GS: return
+
+        print('Thread Created')
         self.stepping = True
         try: 
             if (self.C and self.SW) or not self.S:
@@ -697,6 +699,14 @@ class CPU:
             messagebox.showerror(message=v)
         # print(self.secondary_memory)
 
+
         print('Thread exited')
         self.stepping = False
-      
+    
+    def run_code(self): 
+        while self.running: 
+            self.run_next()
+            if not self.GS: 
+                messagebox.showinfo(message="Execution stopped/not started. Global Start is 0")
+                self.running = False
+        

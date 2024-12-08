@@ -32,14 +32,14 @@ M:
   23: 0 
   24:
     - ADD
-    - AWT 3
+    - AWT 2
     - LDA 0A
     - CAL 0D
     - STA 0D
     - HLT
 
   3A: 0
-  3B: 3
+  3B: 2
   3C: 
     - OR
     - SKI 
