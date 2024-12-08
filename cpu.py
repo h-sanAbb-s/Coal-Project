@@ -33,10 +33,10 @@ class Hex():
         return self.val
     
     def __and__(self, other): 
-        return self._hex(int(self.val, 16) & int(other.val))
+        return self._hex(int(self.val, 16) & int(other.val, 16))
     
     def __or__(self, other): 
-        return self._hex(int(self.val, 16) | int(other.val))
+        return self._hex(int(self.val, 16) | int(other.val, 16))
 
 
 class CPU:
@@ -158,14 +158,14 @@ class CPU:
         if len(codes) == 1:
             return codes[0].strip().upper(), None,False
         elif len(codes) == 2:
-            self.AR = codes[-1].upper().strip()
+            self.AR = Hex(codes[1].upper().strip()).val
             self.block(['AR'])
-            return codes[0],codes[-1].upper(),False
+            return codes[0],self.AR,False
         else:
-            self.AR = codes[-1]
+            self.AR = Hex(codes[1].upper().strip()).val
             self.I = 1
             self.block(['AR'])
-            return codes[0].strip().upper(),codes[-1].strip().upper,True
+            return codes[0].strip().upper(),codes[1].strip().upper,True
 
     @staticmethod
     def hex_op(hex1, hex2, bits = 3, func = lambda x, y : x + y): 
@@ -685,7 +685,7 @@ class CPU:
                 self.fetch()
                 opcode, address, I_address = self.decode()
                 if I_address == True:
-                    self.AR = self.main_memory[address]
+                    self.AR = self.main_memory[int(self.AR, 16)]
                     self.block(['AR'])
                 
                 if opcode in self.instruction_map:
