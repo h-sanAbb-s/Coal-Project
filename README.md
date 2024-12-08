@@ -14,7 +14,7 @@ The `REG` section initializes the registers with their initial values:
 #### Example:
 ```yaml
 REG:
-  TP: 4  # Timer Period
+  TP: 4  # Total Processes
 ```
 
 ### **2. FF (Flip-Flops)**
@@ -25,9 +25,9 @@ The `FF` section sets the initial states of the flip-flops:
 #### Example:
 ```yaml
 FF:
-  GS: 1  # General Switch
-  S: 1   # Status
-  SW: 1  # Another control flag
+  GS: 1  # Global Start
+  S: 1   # Start
+  SW: 1  # Switching
 ```
 
 ### **3. M (Primary Memory)**
