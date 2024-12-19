@@ -10,72 +10,38 @@ M:
   0: #order of context switching
     - 0
     - 1
-    - 2
-  8: 5 #no. of instructions between context switching
+  8: 2 #no. of instructions between context switching
 
   0A: 8 #multiplicand
-  0B: 2 #multiplicant/divider
-  0C: 0 #answer for multiplication
-  0D: 0 #answer for addition with input
+  0B: 0 #answer for addition with input
   
-  1A: #mulitplication
-    - 0
+  0F:
     - ADD
-    - LDA 0C
-    - CAL 0A
-    - STA 0C
-    - LDA 0B
-    - ISA 1A
-    - BR 1C
-    - HLT
-
-  23: 0 
-  24:
-    - ADD
-    - AWT 2
     - LDA 0A
-    - CAL 0D
-    - STA 0D
+    - AWT 1
+    - CAL 0B
+    - STA 0B
     - HLT
 
-  3A: 0
-  3B: 2
-  3C: 
-    - OR
+  16: 
     - SKI 
-    - BR 3D
+    - BR 16
     - INP
-    - CAL 0D
-    - CIL
-    - CIL
-    - CIL
-    - CIL
-    - STA 0D
-    - LDA 3B
-    - ISA 3A
-    - BR 3D
+    - STA 0B
     - HLT
 
 M2: 
   0: 
-    PC: 1B
-    PC0: 1B
+    PC: 0F
+    PC0: 0F
     AC: 0
     E: 0
     A0: 0
     A1: 0
     S: 1
   1: 
-    PC: 24
-    PC0: 24
-    AC: 0
-    E: 0
-    A0: 0
-    A1: 0
-    S: 1
-  2: 
-    PC: 3C
-    PC0: 3C
+    PC: 16
+    PC0: 16
     AC: 0
     E: 0
     A0: 0

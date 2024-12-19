@@ -44,7 +44,7 @@ class UI:
         smf.pack(side=tk.LEFT, anchor=tk.N)
         # Secondary Memory Table
         self.create_secondary_memory_table(smf)
-        self.create_buttons(smf)
+        self.create_buttons(smf) 
 
         def on_closing(): self.root.destroy(); sys.exit()
         # Start the main loop
